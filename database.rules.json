@@ -1,0 +1,23 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "contador": {
+      ".read": true,
+      ".write": true,
+      "counts": {
+        "$persona": {
+          ".validate": "($persona === 'walter' || $persona === 'cesar' || $persona === 'peter') && newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+        }
+      },
+      "last": {
+        "$persona": {
+          ".validate": "($persona === 'walter' || $persona === 'cesar' || $persona === 'peter') && newData.isNumber()"
+        }
+      },
+      "$otro": {
+        ".validate": false
+      }
+    }
+  }
+}

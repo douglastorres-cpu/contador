@@ -1,188 +1,285 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Contador de Cagadas</title>
-  <style>
-    :root {
-      --bg: #f4f1ec;
-      --card: #ffffff;
-      --text: #1f1b16;
-      --muted: #6b645b;
-      --accent: #8b5a2b;
-      --plus: #2e7d32;
-      --minus: #c62828;
-      --border: #e2dcd2;
-      --leader: #fff4d6;
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contador de Cagadas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;600;700&family=JetBrains+Mono:wght@700;800&display=swap">
+<style>
+  /* Layout: tablero de incidencias de obra — cabecera con cinta de seguridad, tres paneles de marcador en fila que se apilan en móvil. */
+  :root {
+    --bg: #eceae4;
+    --panel: #fbfaf7;
+    --ink: #17161a;
+    --muted: #625f58;
+    --line: #d4d0c6;
+    --hazard: #f2b705;
+    --hazard-ink: #17161a;
+    --plus: #1f7a3a;
+    --minus: #b3261e;
+    --lead-bg: #fff3c4;
+    --font-display: "Archivo Black", "Arial Black", Impact, sans-serif;
+    --font-body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-num: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141417; --panel: #1e1e22; --ink: #f0eee8; --muted: #a29f97; --line: #34343a;
+      --hazard: #f2b705; --hazard-ink: #17161a; --plus: #4caf6a; --minus: #e5554b; --lead-bg: #3a3014;
+      color-scheme: dark;
     }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #1a1714;
-        --card: #25211d;
-        --text: #f1ece5;
-        --muted: #a39a8f;
-        --accent: #d49a5f;
-        --plus: #66bb6a;
-        --minus: #ef5350;
-        --border: #3a342d;
-        --leader: #3a2f1c;
-      }
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 32px 16px;
-    }
-    h1 { margin: 0 0 4px; font-size: 2rem; text-align: center; }
-    .subtitle { margin: 0 0 28px; color: var(--muted); text-align: center; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-      width: 100%;
-      max-width: 780px;
-    }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px;
-      text-align: center;
-      transition: background .2s, transform .2s;
-    }
-    .card.leader { background: var(--leader); border-color: var(--accent); }
-    .name { font-size: 1.3rem; font-weight: 700; margin: 0; word-break: break-word; }
-    .badge { height: 1.4em; margin: 4px 0; color: var(--accent); font-weight: 600; font-size: .9rem; }
-    .count {
-      font-size: 4rem;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      margin: 8px 0 16px;
-      line-height: 1;
-    }
-    .buttons { display: flex; gap: 12px; justify-content: center; }
-    button {
-      font: inherit;
-      cursor: pointer;
-      border: none;
-      border-radius: 12px;
-      padding: 12px 0;
-      width: 64px;
-      font-size: 1.6rem;
-      font-weight: 700;
-      color: #fff;
-      transition: transform .08s, opacity .2s;
-    }
-    button:active { transform: scale(.94); }
-    button:disabled { opacity: .35; cursor: not-allowed; }
-    .plus { background: var(--plus); }
-    .minus { background: var(--minus); }
-    .reset {
-      margin-top: 28px;
-      width: auto;
-      padding: 10px 18px;
-      font-size: .95rem;
-      font-weight: 600;
-      background: transparent;
-      color: var(--muted);
-      border: 1px solid var(--border);
-    }
-    .total { margin-top: 20px; color: var(--muted); }
-    .bump { animation: bump .25s ease; }
-    @keyframes bump { 50% { transform: scale(1.25); } }
-  </style>
+  }
+  :root[data-theme="dark"] {
+    --bg: #141417; --panel: #1e1e22; --ink: #f0eee8; --muted: #a29f97; --line: #34343a;
+    --hazard: #f2b705; --hazard-ink: #17161a; --plus: #4caf6a; --minus: #e5554b; --lead-bg: #3a3014;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    padding-inline: 16px;
+    padding-block: 0 40px;
+  }
+  .tape {
+    height: 14px;
+    margin-inline: -16px;
+    background: repeating-linear-gradient(-45deg, var(--hazard) 0 18px, var(--hazard-ink) 18px 36px);
+  }
+  .wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; padding-top: 28px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+  h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.9rem, 6vw, 3rem);
+    line-height: .95;
+    text-transform: uppercase;
+    letter-spacing: -.01em;
+    text-wrap: balance;
+  }
+  .sub { margin: 6px 0 0; color: var(--muted); }
+  .status {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted);
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .status[data-mode="live"] .dot { background: var(--plus); box-shadow: 0 0 0 4px color-mix(in srgb, var(--plus) 25%, transparent); }
+  .status[data-mode="offline"] .dot { background: var(--hazard); }
+
+  .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 680px) { .board { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 2px solid var(--line);
+    border-radius: 6px;
+    padding: 18px;
+    display: flex; flex-direction: column; gap: 10px;
+    transition: background-color .2s, border-color .2s;
+  }
+  .panel.lead { background: var(--lead-bg); border-color: var(--hazard); }
+  .row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 8px; }
+  .name { font-family: var(--font-display); font-size: 1.25rem; text-transform: uppercase; overflow-wrap: break-word; max-width: 100%; }
+  .tag {
+    font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    background: var(--hazard); color: var(--hazard-ink); padding: 3px 7px; border-radius: 3px; white-space: nowrap;
+  }
+  .count {
+    font-family: var(--font-num); font-weight: 800;
+    font-size: clamp(3.5rem, 12vw, 5rem); line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .last { color: var(--muted); font-size: .85rem; min-height: 1.2em; }
+  .btns { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+  button {
+    font: inherit; cursor: pointer; border: 0; border-radius: 5px;
+    padding: 12px 10px; font-weight: 700; color: #fff;
+    transition: transform .08s, opacity .2s;
+  }
+  button:focus-visible { outline: 3px solid var(--hazard); outline-offset: 2px; }
+  button:active:not(:disabled) { transform: scale(.96); }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  .minus { background: var(--minus); font-size: 1.5rem; line-height: 1; }
+  .plus { background: var(--plus); font-size: 1rem; }
+
+  footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; border-top: 2px solid var(--line); padding-top: 16px; }
+  .total { font-weight: 600; }
+  .total b { font-family: var(--font-num); }
+  .reset-area { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .ghost { background: transparent; color: var(--ink); border: 2px solid var(--line); padding: 8px 14px; font-size: .9rem; }
+  .danger { background: var(--minus); padding: 8px 14px; font-size: .9rem; }
+  .note { color: var(--muted); font-size: .85rem; margin: 0; }
+
+  .bump { animation: bump .25s ease; }
+  @keyframes bump { 50% { transform: scale(1.18); } }
+  @media (prefers-reduced-motion: reduce) { .bump { animation: none; } button { transition: none; } }
+</style>
 </head>
 <body>
-  <h1>💩 Contador de Cagadas</h1>
-  <p class="subtitle">¿Quién la ha cagado más durante la jornada?</p>
 
-  <div class="grid" id="grid"></div>
+<div class="tape" aria-hidden="true"></div>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Contador de Cagadas</h1>
+      <p class="sub">Registro oficial de quién la ha liado más en la jornada.</p>
+    </div>
+    <span class="status" id="status" data-mode="connecting"><span class="dot"></span><span id="status-text">Conectando…</span></span>
+  </header>
 
-  <p class="total" id="total"></p>
-  <button class="reset" id="reset">Reiniciar contador</button>
+  <section class="board" id="board" aria-label="Marcador"></section>
 
-  <script>
-    const NAMES = ["Walter", "Cesar", "peterGAYmer"];
-    const STORAGE_KEY = "contador-cagadas";
+  <footer>
+    <span class="total">Total del equipo: <b id="total">0</b></span>
+    <div class="reset-area">
+      <button class="ghost" id="reset">Reiniciar a 0</button>
+      <span id="confirm" hidden>
+        <span class="note">¿Seguro? Se pone a 0 para todos.</span>
+        <button class="danger" id="reset-yes">Sí, reiniciar</button>
+        <button class="ghost" id="reset-no">Cancelar</button>
+      </span>
+    </div>
+  </footer>
+  <p class="note" id="note"></p>
+</div>
 
-    function load() {
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (saved && typeof saved === "object") return saved;
-      } catch (e) {}
-      return {};
-    }
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getDatabase, ref, onValue, update, set, runTransaction, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    function save() {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(counts)); } catch (e) {}
-    }
+  // Configuración pública del proyecto de Firebase (no es secreta: la seguridad
+  // la ponen las reglas de la base de datos, ver database.rules.json).
+  const firebaseConfig = {
+    apiKey: "AIzaSyCfGjbzeQgHqwhSleO0Xp9QRadoDM2zfRc",
+    authDomain: "contador-eaa71.firebaseapp.com",
+    databaseURL: "https://contador-eaa71-default-rtdb.firebaseio.com",
+    projectId: "contador-eaa71",
+    storageBucket: "contador-eaa71.firebasestorage.app",
+    messagingSenderId: "6428742945",
+    appId: "1:6428742945:web:d1404af3e38c9b4f785a60",
+  };
 
-    const counts = load();
-    NAMES.forEach(n => { if (!Number.isInteger(counts[n])) counts[n] = 0; });
+  const PEOPLE = [
+    { key: "walter", name: "Walter" },
+    { key: "cesar", name: "Cesar" },
+    { key: "peter", name: "peterGAYmer" },
+  ];
+  const zeros = () => Object.fromEntries(PEOPLE.map(p => [p.key, 0]));
 
-    const grid = document.getElementById("grid");
-    const cards = {};
+  const db = getDatabase(initializeApp(firebaseConfig));
+  const root = ref(db, "contador");
 
-    NAMES.forEach(name => {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = `
-        <p class="name"></p>
-        <div class="badge"></div>
-        <div class="count">0</div>
-        <div class="buttons">
-          <button class="minus" aria-label="Restar">−</button>
-          <button class="plus" aria-label="Sumar">+</button>
-        </div>`;
-      card.querySelector(".name").textContent = name;
-      card.querySelector(".plus").addEventListener("click", () => change(name, 1));
-      card.querySelector(".minus").addEventListener("click", () => change(name, -1));
-      grid.appendChild(card);
-      cards[name] = card;
+  let counts = zeros();
+  let last = {};
+  let loaded = false;
+  let connected = false;
+  let serverOffset = 0;
+
+  const $ = id => document.getElementById(id);
+  const panels = {};
+
+  PEOPLE.forEach(p => {
+    const el = document.createElement("article");
+    el.className = "panel";
+    el.innerHTML = `
+      <div class="row"><span class="name"></span><span class="tag" hidden>Va en cabeza</span></div>
+      <div class="count" aria-live="polite">0</div>
+      <div class="last"></div>
+      <div class="btns">
+        <button class="minus" aria-label="Restar una a ${p.name}">−</button>
+        <button class="plus">+1 cagada</button>
+      </div>`;
+    el.querySelector(".name").textContent = p.name;
+    el.querySelector(".plus").addEventListener("click", () => plus(p.key));
+    el.querySelector(".minus").addEventListener("click", () => minus(p.key));
+    $("board").appendChild(el);
+    panels[p.key] = el;
+  });
+
+  function ago(t) {
+    if (!t) return "";
+    const s = Math.max(0, Math.round((Date.now() + serverOffset - t) / 1000));
+    if (s < 60) return "Última: hace un momento";
+    const m = Math.round(s / 60);
+    if (m < 60) return `Última: hace ${m} min`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `Última: hace ${h} h`;
+    return `Última: hace ${Math.round(h / 24)} días`;
+  }
+
+  function render() {
+    const max = Math.max(...PEOPLE.map(p => counts[p.key]));
+    const leaders = PEOPLE.filter(p => counts[p.key] === max);
+    PEOPLE.forEach(p => {
+      const el = panels[p.key];
+      const lead = max > 0 && leaders.includes(p);
+      el.classList.toggle("lead", lead);
+      const tag = el.querySelector(".tag");
+      tag.hidden = !lead;
+      tag.textContent = leaders.length > 1 ? "Empate en cabeza" : "Va en cabeza";
+      const c = el.querySelector(".count");
+      if (c.textContent !== String(counts[p.key])) {
+        c.textContent = counts[p.key];
+        c.classList.remove("bump"); void c.offsetWidth; c.classList.add("bump");
+      }
+      el.querySelector(".last").textContent = ago(last[p.key]);
+      el.querySelector(".plus").disabled = !loaded;
+      el.querySelector(".minus").disabled = !loaded || counts[p.key] === 0;
     });
+    $("total").textContent = PEOPLE.reduce((s, p) => s + counts[p.key], 0);
+    $("reset").disabled = !loaded;
 
-    function change(name, delta) {
-      counts[name] = Math.max(0, counts[name] + delta);
-      save();
-      render();
-      const el = cards[name].querySelector(".count");
-      el.classList.remove("bump");
-      void el.offsetWidth;
-      el.classList.add("bump");
-    }
+    const status = $("status");
+    if (!loaded) { status.dataset.mode = "connecting"; $("status-text").textContent = "Conectando…"; }
+    else if (connected) { status.dataset.mode = "live"; $("status-text").textContent = "En directo"; }
+    else { status.dataset.mode = "offline"; $("status-text").textContent = "Sin conexión"; }
+  }
 
-    function render() {
-      const max = Math.max(...NAMES.map(n => counts[n]));
-      const leaders = NAMES.filter(n => counts[n] === max);
-      NAMES.forEach(name => {
-        const card = cards[name];
-        const isLeader = max > 0 && leaders.includes(name);
-        card.classList.toggle("leader", isLeader);
-        card.querySelector(".count").textContent = counts[name];
-        card.querySelector(".badge").textContent =
-          isLeader ? (leaders.length > 1 ? "👑 Empatado en cabeza" : "👑 El más cagón") : "";
-        card.querySelector(".minus").disabled = counts[name] === 0;
-      });
-      const total = NAMES.reduce((s, n) => s + counts[n], 0);
-      document.getElementById("total").textContent = `Total de cagadas del equipo: ${total}`;
-    }
+  function fail(err) {
+    console.error(err);
+    $("note").textContent = err && /permission/i.test(String(err.code || err.message))
+      ? "La base de datos ha rechazado el cambio. Revisa las reglas de Firebase (database.rules.json)."
+      : "No se pudo guardar el cambio. Comprueba la conexión y vuelve a pulsar.";
+  }
 
-    document.getElementById("reset").addEventListener("click", () => {
-      if (!confirm("¿Seguro que quieres poner todos los contadores a 0?")) return;
-      NAMES.forEach(n => counts[n] = 0);
-      save();
-      render();
-    });
+  // Sumar usa un incremento atómico del servidor, así que dos clics a la vez
+  // desde ordenadores distintos cuentan los dos.
+  function plus(key) {
+    $("note").textContent = "";
+    update(root, { [`counts/${key}`]: increment(1), [`last/${key}`]: serverTimestamp() }).catch(fail);
+  }
 
+  function minus(key) {
+    $("note").textContent = "";
+    runTransaction(ref(db, `contador/counts/${key}`), v => Math.max(0, (Number(v) || 0) - 1)).catch(fail);
+  }
+
+  $("reset").addEventListener("click", () => { $("reset").hidden = true; $("confirm").hidden = false; });
+  $("reset-no").addEventListener("click", () => { $("confirm").hidden = true; $("reset").hidden = false; });
+  $("reset-yes").addEventListener("click", () => {
+    $("confirm").hidden = true; $("reset").hidden = false;
+    set(root, { counts: zeros() }).catch(fail);
+  });
+
+  onValue(root, snap => {
+    const v = snap.val() || {};
+    counts = zeros();
+    for (const p of PEOPLE) counts[p.key] = Math.max(0, Number(v.counts?.[p.key]) || 0);
+    last = v.last || {};
+    loaded = true;
     render();
-  </script>
+  }, err => {
+    fail(err);
+  });
+  onValue(ref(db, ".info/connected"), snap => { connected = snap.val() === true; render(); });
+  onValue(ref(db, ".info/serverTimeOffset"), snap => { serverOffset = Number(snap.val()) || 0; render(); });
+
+  setInterval(render, 30000);
+  render();
+</script>
 </body>
 </html>

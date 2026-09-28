@@ -1,25 +1,35 @@
 # 💩 Contador de Cagadas
 
-Contador web para llevar la cuenta de quién la ha cagado más veces mientras trabajamos.
+Marcador compartido en tiempo real para llevar la cuenta de quién la ha cagado más veces mientras trabajamos.
 
 Participantes: **Walter**, **Cesar** y **peterGAYmer**.
 
-## Uso
+## Cómo funciona
 
-Abre `index.html` en el navegador. No necesita instalar nada.
+- `index.html` es toda la página. Se publica gratis con **GitHub Pages**.
+- Los números se guardan en **Firebase Realtime Database** (proyecto `contador-eaa71`), así que todos los que abren la página ven el mismo marcador y se actualiza al instante.
+- **+1 cagada** suma de forma atómica en el servidor: si dos personas pulsan a la vez, cuentan los dos clics.
+- **−** resta una (nunca baja de 0).
+- **Reiniciar a 0** pide confirmación y pone el marcador a cero para todos.
+- Arriba a la derecha, «En directo» indica que está conectado a la base de datos.
 
-- **+** suma una cagada, **−** la resta (nunca baja de 0).
-- El que va primero se marca con 👑.
-- Los contadores se guardan en el navegador (`localStorage`), así que no se pierden al recargar.
-- **Reiniciar contador** pone todo a 0.
+## Publicar en GitHub Pages
 
-## Versión en tiempo real
+1. El repositorio tiene que ser **público** (con cuenta gratuita de GitHub).
+2. En GitHub: **Settings → Pages → Build and deployment**.
+3. *Source*: **Deploy from a branch**. Elige la rama donde esté `index.html` y la carpeta `/ (root)`. Guarda.
+4. En uno o dos minutos la página queda en `https://douglastorres-cpu.github.io/contador/`.
 
-`artifact/contador.html` es la versión compartida, publicada como Artifact de claude.ai:
-https://claude.ai/artifact/8m3ctxcWxp5P69D83VTcbU
+## Reglas de Firebase
 
-- Todos los que tengan el enlace ven el mismo marcador y se actualiza al instante.
-- Cada persona apunta en su propio registro y el marcador suma los de todos, así que dos clics a la vez no se pisan.
-- «Reiniciar a 0» pone el marcador a cero para todos.
-- Para apuntar hay que tener cuenta de claude.ai y acceso de **Colaborador** (Contributor) desde el menú Compartir del artifact. Con acceso de solo lectura se ve el marcador pero no se puede apuntar.
-- Si se abre fuera de claude.ai funciona en modo local (solo en ese navegador).
+El «modo de prueba» de Firebase deja de funcionar a los 30 días. Para que siga funcionando:
+
+1. En la consola de Firebase: **Realtime Database → Reglas**.
+2. Sustituye el contenido por el de `database.rules.json` y pulsa **Publicar**.
+
+Estas reglas dejan leer y escribir solo el marcador (`/contador`), solo para los tres nombres y solo con números entre 0 y 100000. Cualquiera que tenga el enlace puede sumar y restar.
+
+## Versión de claude.ai
+
+`artifact/contador.html` es una versión alternativa publicada como Artifact de claude.ai
+(https://claude.ai/artifact/8m3ctxcWxp5P69D83VTcbU). Usa la base de datos de claude.ai en lugar de Firebase y requiere que cada persona tenga cuenta de claude.ai.
