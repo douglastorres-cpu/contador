@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contador de Cagadas</title>
+  <style>
+    :root {
+      --bg: #f4f1ec;
+      --card: #ffffff;
+      --text: #1f1b16;
+      --muted: #6b645b;
+      --accent: #8b5a2b;
+      --plus: #2e7d32;
+      --minus: #c62828;
+      --border: #e2dcd2;
+      --leader: #fff4d6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1714;
+        --card: #25211d;
+        --text: #f1ece5;
+        --muted: #a39a8f;
+        --accent: #d49a5f;
+        --plus: #66bb6a;
+        --minus: #ef5350;
+        --border: #3a342d;
+        --leader: #3a2f1c;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px;
+    }
+    h1 { margin: 0 0 4px; font-size: 2rem; text-align: center; }
+    .subtitle { margin: 0 0 28px; color: var(--muted); text-align: center; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      width: 100%;
+      max-width: 780px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      transition: background .2s, transform .2s;
+    }
+    .card.leader { background: var(--leader); border-color: var(--accent); }
+    .name { font-size: 1.3rem; font-weight: 700; margin: 0; word-break: break-word; }
+    .badge { height: 1.4em; margin: 4px 0; color: var(--accent); font-weight: 600; font-size: .9rem; }
+    .count {
+      font-size: 4rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      margin: 8px 0 16px;
+      line-height: 1;
+    }
+    .buttons { display: flex; gap: 12px; justify-content: center; }
+    button {
+      font: inherit;
+      cursor: pointer;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 0;
+      width: 64px;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fff;
+      transition: transform .08s, opacity .2s;
+    }
+    button:active { transform: scale(.94); }
+    button:disabled { opacity: .35; cursor: not-allowed; }
+    .plus { background: var(--plus); }
+    .minus { background: var(--minus); }
+    .reset {
+      margin-top: 28px;
+      width: auto;
+      padding: 10px 18px;
+      font-size: .95rem;
+      font-weight: 600;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .total { margin-top: 20px; color: var(--muted); }
+    .bump { animation: bump .25s ease; }
+    @keyframes bump { 50% { transform: scale(1.25); } }
+  </style>
+</head>
+<body>
+  <h1>💩 Contador de Cagadas</h1>
+  <p class="subtitle">¿Quién la ha cagado más durante la jornada?</p>
+
+  <div class="grid" id="grid"></div>
+
+  <p class="total" id="total"></p>
+  <button class="reset" id="reset">Reiniciar contador</button>
+
+  <script>
+    const NAMES = ["Walter", "Cesar", "peterGAYmer"];
+    const STORAGE_KEY = "contador-cagadas";
+
+    function load() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (saved && typeof saved === "object") return saved;
+      } catch (e) {}
+      return {};
+    }
+
+    function save() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(counts)); } catch (e) {}
+    }
+
+    const counts = load();
+    NAMES.forEach(n => { if (!Number.isInteger(counts[n])) counts[n] = 0; });
+
+    const grid = document.getElementById("grid");
+    const cards = {};
+
+    NAMES.forEach(name => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <p class="name"></p>
+        <div class="badge"></div>
+        <div class="count">0</div>
+        <div class="buttons">
+          <button class="minus" aria-label="Restar">−</button>
+          <button class="plus" aria-label="Sumar">+</button>
+        </div>`;
+      card.querySelector(".name").textContent = name;
+      card.querySelector(".plus").addEventListener("click", () => change(name, 1));
+      card.querySelector(".minus").addEventListener("click", () => change(name, -1));
+      grid.appendChild(card);
+      cards[name] = card;
+    });
+
+    function change(name, delta) {
+      counts[name] = Math.max(0, counts[name] + delta);
+      save();
+      render();
+      const el = cards[name].querySelector(".count");
+      el.classList.remove("bump");
+      void el.offsetWidth;
+      el.classList.add("bump");
+    }
+
+    function render() {
+      const max = Math.max(...NAMES.map(n => counts[n]));
+      const leaders = NAMES.filter(n => counts[n] === max);
+      NAMES.forEach(name => {
+        const card = cards[name];
+        const isLeader = max > 0 && leaders.includes(name);
+        card.classList.toggle("leader", isLeader);
+        card.querySelector(".count").textContent = counts[name];
+        card.querySelector(".badge").textContent =
+          isLeader ? (leaders.length > 1 ? "👑 Empatado en cabeza" : "👑 El más cagón") : "";
+        card.querySelector(".minus").disabled = counts[name] === 0;
+      });
+      const total = NAMES.reduce((s, n) => s + counts[n], 0);
+      document.getElementById("total").textContent = `Total de cagadas del equipo: ${total}`;
+    }
+
+    document.getElementById("reset").addEventListener("click", () => {
+      if (!confirm("¿Seguro que quieres poner todos los contadores a 0?")) return;
+      NAMES.forEach(n => counts[n] = 0);
+      save();
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
