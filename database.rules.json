@@ -41,6 +41,9 @@
             "t": {
               ".validate": "newData.isNumber() && newData.val() <= now + 60000"
             },
+            "razon": {
+              ".validate": "newData.isString() && newData.val().length <= 300"
+            },
             "$otro": {
               ".validate": false
             }

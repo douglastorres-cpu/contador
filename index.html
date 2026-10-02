@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Registro de Incidencias</title>
+<script>try { const t = localStorage.getItem("tema"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;600;700&family=JetBrains+Mono:wght@700;800&display=swap">
@@ -74,7 +75,8 @@
   .status[data-mode="offline"] .dot { background: var(--hazard); }
 
   /* Pestañas */
-  .tabs-scroll { overflow-x: auto; margin-inline: -16px; padding-inline: 16px; }
+  .tabs-scroll { overflow-x: auto; overflow-y: hidden; margin-inline: -16px; padding-inline: 16px; scrollbar-width: none; }
+  .tabs-scroll::-webkit-scrollbar { display: none; }
   .tabs { display: flex; gap: 6px; border-bottom: 2px solid var(--line); min-width: max-content; }
   .tab {
     font: inherit; font-weight: 700; font-size: .9rem; cursor: pointer;
@@ -88,11 +90,47 @@
 
   .module-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
   .add { display: flex; gap: 8px; flex-wrap: wrap; }
-  .add input {
+  .add input, .field input, .field textarea {
     font: inherit; padding: 9px 12px; border: 2px solid var(--line); border-radius: 5px;
     background: var(--panel); color: var(--ink); min-width: 0; width: 220px; max-width: 100%;
   }
-  .add input:focus-visible { outline: 3px solid var(--hazard); outline-offset: 1px; }
+  .add input:focus-visible, .field input:focus-visible, .field textarea:focus-visible { outline: 3px solid var(--hazard); outline-offset: 1px; }
+  .header-right { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+
+  /* Ventanas emergentes */
+  dialog {
+    width: min(480px, calc(100% - 32px)); max-height: calc(100% - 48px);
+    border: 2px solid var(--line); border-radius: 8px; padding: 0;
+    background: var(--panel); color: var(--ink);
+  }
+  dialog::backdrop { background: rgb(0 0 0 / .55); }
+  .modal { display: flex; flex-direction: column; gap: 14px; padding: 20px; }
+  .modal h2 { font-size: 1.1rem; overflow-wrap: anywhere; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-weight: 700; font-size: .9rem; }
+  .field input, .field textarea { width: 100%; }
+  .field textarea { min-height: 110px; resize: vertical; line-height: 1.4; }
+  .hint { color: var(--muted); font-size: .8rem; }
+  .error { color: var(--minus); font-size: .85rem; font-weight: 600; }
+  .modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  .modal .block { width: 100%; padding: 12px; font-size: 1rem; }
+  .inc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 55vh; overflow: auto; }
+  .inc-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 2px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+  .inc-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .inc-title { font-weight: 700; overflow-wrap: anywhere; }
+  .inc-meta { color: var(--muted); font-size: .8rem; }
+  .inc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .inc-actions button { padding: 6px 10px; font-size: .8rem; }
+
+  /* Reportes */
+  .report-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .seg { display: inline-flex; border: 2px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--ink); border-radius: 0; padding: 7px 12px; font-size: .85rem; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  .period { font-weight: 700; min-width: 0; }
+  .icon-btn { background: transparent; color: var(--ink); border: 2px solid var(--line); padding: 5px 11px; font-size: 1rem; }
+  td.reason { white-space: normal; min-width: 220px; overflow-wrap: anywhere; }
+  td.muted { color: var(--muted); }
 
   .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
   .empty {
@@ -186,7 +224,10 @@
       <h1>Registro de Incidencias</h1>
       <p class="sub">Seguimiento en tiempo real de incidencias por departamento. Horario de Perú.</p>
     </div>
-    <span class="status" id="status" data-mode="connecting"><span class="dot"></span><span id="status-text">Conectando…</span></span>
+    <div class="header-right">
+      <span class="status" id="status" data-mode="connecting"><span class="dot"></span><span id="status-text">Conectando…</span></span>
+      <button class="ghost" id="theme" type="button"></button>
+    </div>
   </header>
 
   <div class="tabs-scroll"><nav class="tabs" id="tabs" role="tablist" aria-label="Departamentos"></nav></div>
@@ -195,9 +236,12 @@
   <p class="note" id="note"></p>
 </div>
 
+<dialog id="modal"></dialog>
+
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getDatabase, ref, onValue, update, set, push, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+  import { getDatabase, ref, onValue, update, set, push, remove, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
   // Configuración pública del proyecto de Firebase (no es secreta: la seguridad
   // la ponen las reglas de la base de datos, ver database.rules.json).
@@ -222,31 +266,83 @@
   ];
   const SUMMARY = "resumen";
   const MAX_NAME = 40;
+  const MAX_REASON = 300;
+  const LEGACY_REASON = "Registrada antes del histórico";
 
-  // Hora de Perú: UTC-5 todo el año (no hay horario de verano). El día va de
-  // 00:00 a 00:00 hora de Perú; el contador de «Hoy» empieza de cero cada día
-  // y todo queda guardado en el histórico.
+  // ---- fechas en hora de Perú ----
+  // Perú es UTC-5 todo el año (no hay horario de verano). El día va de 00:00 a
+  // 00:00 hora de Perú; «Hoy» empieza de cero cada día y todo queda en el histórico.
   const PERU_OFFSET_MS = -5 * 3600 * 1000;
+  const DAY_MS = 86400000;
   const peru = t => new Date(t + PERU_OFFSET_MS);
   const dayKey = t => peru(t).toISOString().slice(0, 10);   // "2026-10-02"
   const hourOf = t => peru(t).getUTCHours();
+  const keyDate = k => new Date(k + "T00:00:00Z");
+  const addDays = (k, n) => new Date(keyDate(k).getTime() + n * DAY_MS).toISOString().slice(0, 10);
   const fmtDay = new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
-  const dayLabel = key => fmtDay.format(new Date(key + "T12:00:00Z"));
+  const fmtDayMonth = new Intl.DateTimeFormat("es-PE", { day: "numeric", month: "long", timeZone: "UTC" });
+  const fmtMonth = new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric", timeZone: "UTC" });
+  const fmtWhen = new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Lima" });
+  const dayLabel = k => fmtDay.format(keyDate(k));
+  const when = t => fmtWhen.format(new Date(t));
   const pad = n => String(n).padStart(2, "0");
   const hourLabel = hr => `${pad(hr)}:00 – ${pad((hr + 1) % 24)}:00`;
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // Periodo de un reporte: [primer día, último día] (ambos incluidos)
+  function periodRange(kind, anchor) {
+    if (kind === "dia") return { start: anchor, end: anchor, label: dayLabel(anchor) };
+    if (kind === "semana") {
+      const dow = (keyDate(anchor).getUTCDay() + 6) % 7;          // lunes = 0
+      const start = addDays(anchor, -dow), end = addDays(start, 6);
+      return { start, end, label: `Semana del ${fmtDayMonth.format(keyDate(start))} al ${fmtDayMonth.format(keyDate(end))} de ${end.slice(0, 4)}` };
+    }
+    const start = anchor.slice(0, 8) + "01";
+    const d = keyDate(start); d.setUTCMonth(d.getUTCMonth() + 1);
+    const end = addDays(d.toISOString().slice(0, 10), -1);
+    return { start, end, label: cap(fmtMonth.format(keyDate(start))) };
+  }
+  function shiftPeriod(kind, anchor, dir) {
+    if (kind === "dia") return addDays(anchor, dir);
+    if (kind === "semana") return addDays(anchor, 7 * dir);
+    const d = keyDate(anchor.slice(0, 8) + "01"); d.setUTCMonth(d.getUTCMonth() + dir);
+    return d.toISOString().slice(0, 10);
+  }
+
+  // ---- tema (día / noche), guardado en este navegador ----
+  const themeBtn = document.getElementById("theme");
+  const darkMq = window.matchMedia("(prefers-color-scheme: dark)");
+  const currentTheme = () => document.documentElement.dataset.theme || (darkMq.matches ? "dark" : "light");
+  function paintThemeBtn() {
+    const dark = currentTheme() === "dark";
+    themeBtn.textContent = dark ? "☀ Modo día" : "☾ Modo noche";
+    themeBtn.setAttribute("aria-label", dark ? "Cambiar a modo día" : "Cambiar a modo noche");
+  }
+  themeBtn.addEventListener("click", () => {
+    const next = currentTheme() === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("tema", next); } catch (e) {}
+    paintThemeBtn();
+  });
+  darkMq.addEventListener?.("change", paintThemeBtn);
+  paintThemeBtn();
 
   const db = getDatabase(initializeApp(firebaseConfig));
 
-  // equipos/<modulo>/personas/<id> = { nombre, creado, activo? }
-  // equipos/<modulo>/eventos/<id>  = { persona, t }   (una incidencia cada uno)
+  // equipos/<modulo>/personas/<id> = { nombre, creado, activo }
+  // equipos/<modulo>/eventos/<id>  = { persona, t, razon? }   (una incidencia cada uno)
   let data = {};
   let loaded = false;
   let connected = false;
   let serverOffset = 0;
   let active = SUMMARY;
-  let pendingRemove = null;
-  let selectedDay = {};     // modulo -> día elegido en el histórico
-  let lastShown = {};       // para animar solo lo que cambia
+  let pendingRemove = null;          // persona con confirmación de «Quitar persona» abierta
+  let selectedDay = {};              // modulo -> día elegido en «Por hora»
+  let search = {};                   // modulo -> texto del buscador
+  let report = { kind: "dia", anchor: null };
+  let lastShown = {};
+  let modal = null;                  // { kind: "minus", mod, pid, confirm } mientras está abierto
+  const migrating = new Set();
 
   const now = () => Date.now() + serverOffset;
   const today = () => dayKey(now());
@@ -263,34 +359,36 @@
     for (const kid of kids.flat()) if (kid != null) el.append(kid);
     return el;
   };
+  const norm = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
   // ---- datos derivados ----
   function model(mod) {
     const raw = data[mod] || {};
     const td = today();
     const persons = Object.entries(raw.personas || {})
-      .map(([id, p]) => ({ id, nombre: String(p.nombre || "Sin nombre"), creado: Number(p.creado) || 0, activo: p.activo !== false, total: 0, hoy: 0, last: 0, lastTodayEvent: null }))
+      .map(([id, p]) => ({ id, mod, nombre: String(p.nombre || "Sin nombre"), creado: Number(p.creado) || 0, activo: p.activo !== false, total: 0, hoy: 0, last: 0, events: [] }))
       .sort((a, b) => a.creado - b.creado || a.id.localeCompare(b.id));
     const byId = Object.fromEntries(persons.map(p => [p.id, p]));
-    const days = {};   // dayKey -> { personId: n, _total: n, hours: { hr: { personId: n, _total } } }
+    const days = {};
+    const events = [];
     for (const [eid, e] of Object.entries(raw.eventos || {})) {
       const p = byId[e.persona]; const t = Number(e.t);
       if (!p || !t) continue;
+      const ev = { id: eid, mod, persona: p, t, razon: typeof e.razon === "string" ? e.razon.trim() : "" };
+      events.push(ev); p.events.push(ev);
       p.total++;
       if (t > p.last) p.last = t;
       const dk = dayKey(t), hr = hourOf(t);
-      if (dk === td) {
-        p.hoy++;
-        if (!p.lastTodayEvent || t > p.lastTodayEvent.t) p.lastTodayEvent = { id: eid, t };
-      }
+      if (dk === td) p.hoy++;
       const d = days[dk] ||= { _total: 0, hours: {} };
       d[p.id] = (d[p.id] || 0) + 1; d._total++;
       const hh = d.hours[hr] ||= { _total: 0 };
       hh[p.id] = (hh[p.id] || 0) + 1; hh._total++;
     }
+    for (const p of persons) p.events.sort((a, b) => a.t - b.t || a.id.localeCompare(b.id));
     const totalHist = persons.reduce((s, p) => s + p.total, 0);
     const totalHoy = persons.reduce((s, p) => s + p.hoy, 0);
-    return { persons, active: persons.filter(p => p.activo), days, totalHist, totalHoy };
+    return { persons, active: persons.filter(p => p.activo), days, events, totalHist, totalHoy };
   }
 
   function ago(t) {
@@ -313,22 +411,121 @@
   const ok = () => { $("note").textContent = ""; };
 
   // ---- acciones ----
-  function plus(mod, id) {
-    set(push(ref(db, `equipos/${mod}/eventos`)), { persona: id, t: serverTimestamp() }).then(ok, fail);
+  function plus(mod, id, razon) {
+    const ev = { persona: id, t: serverTimestamp() };
+    razon = razon.trim().slice(0, MAX_REASON);
+    if (razon) ev.razon = razon;
+    set(push(ref(db, `equipos/${mod}/eventos`)), ev).then(ok, fail);
   }
-  // Restar quita la última incidencia de hoy de esa persona (los días pasados no se tocan).
-  function minus(mod, p) {
-    if (p.lastTodayEvent) remove(ref(db, `equipos/${mod}/eventos/${p.lastTodayEvent.id}`)).then(ok, fail);
+  function removeEvent(mod, eid) {
+    remove(ref(db, `equipos/${mod}/eventos/${eid}`)).then(ok, fail);
   }
   function addPerson(mod, nombre) {
-    nombre = nombre.trim().replace(/\s+/g, " ").slice(0, MAX_NAME);
-    if (!nombre) return;
-    set(push(ref(db, `equipos/${mod}/personas`)), { nombre, creado: serverTimestamp(), activo: true }).then(ok, fail);
+    const archived = model(mod).persons.find(p => !p.activo && norm(p.nombre) === norm(nombre));
+    if (archived) return update(ref(db, `equipos/${mod}/personas/${archived.id}`), { activo: true }).then(ok, fail);
+    return set(push(ref(db, `equipos/${mod}/personas`)), { nombre, creado: serverTimestamp(), activo: true }).then(ok, fail);
   }
   // Quitar a una persona la oculta del marcador pero conserva su histórico.
   function archivePerson(mod, id) {
     pendingRemove = null;
     update(ref(db, `equipos/${mod}/personas/${id}`), { activo: false }).then(ok, fail);
+  }
+
+  // La versión anterior guardaba un número («count») sin fechas. La primera vez
+  // que alguien abre la página lo convierte en incidencias del histórico. La
+  // transacción garantiza que solo un navegador hace la conversión.
+  async function migrateLegacy() {
+    for (const m of MODULES) {
+      for (const [id, p] of Object.entries(data[m.key]?.personas || {})) {
+        if (!(Number(p.count) > 0) || migrating.has(m.key + id)) continue;
+        migrating.add(m.key + id);
+        let prev = 0;
+        try {
+          const res = await runTransaction(ref(db, `equipos/${m.key}/personas/${id}/count`), v => {
+            prev = Number(v) || 0;
+            return prev > 0 ? 0 : undefined;
+          });
+          if (!res.committed || prev <= 0) continue;
+          const t = Number(p.last) || Number(p.creado) || now();
+          const changes = {};
+          for (let i = 0; i < prev; i++) changes[push(ref(db, `equipos/${m.key}/eventos`)).key] = { persona: id, t, razon: LEGACY_REASON };
+          await update(ref(db, `equipos/${m.key}/eventos`), changes);
+        } catch (e) { console.error(e); }
+      }
+    }
+  }
+
+  // ---- ventanas emergentes ----
+  const dlg = $("modal");
+  dlg.addEventListener("close", () => { modal = null; });
+  function openDialog(content) {
+    dlg.replaceChildren(content);
+    if (!dlg.open) dlg.showModal();
+  }
+  function closeDialog() { if (dlg.open) dlg.close(); modal = null; }
+
+  function openPlus(p) {
+    modal = { kind: "plus" };
+    const ta = h("textarea", { id: "razon", maxlength: String(MAX_REASON), placeholder: "Ej.: No hubo suficiente comunicación con el cliente" });
+    const form = h("form", { class: "modal", onsubmit: e => { e.preventDefault(); plus(p.mod, p.id, ta.value); closeDialog(); } },
+      h("h2", {}, `Nueva incidencia · ${p.nombre}`),
+      h("div", { class: "field" },
+        h("label", { for: "razon" }, "Razón:"), ta,
+        h("span", { class: "hint" }, "Opcional. Aparecerá en los reportes diarios, semanales y mensuales.")),
+      h("div", { class: "modal-actions" },
+        h("button", { type: "button", class: "ghost", onclick: closeDialog }, "Cancelar"),
+        h("button", { type: "submit", class: "plus" }, "Registrar incidencia")));
+    ta.addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) form.requestSubmit(); });
+    openDialog(form);
+    ta.focus();
+  }
+
+  function openAdd(mod) {
+    modal = { kind: "add" };
+    const input = h("input", { id: "nuevo-nombre", type: "text", maxlength: String(MAX_NAME), autocomplete: "off", placeholder: "Nombre y apellido" });
+    const err = h("p", { class: "error", hidden: true });
+    const form = h("form", { class: "modal", onsubmit: e => {
+        e.preventDefault();
+        const nombre = input.value.trim().replace(/\s+/g, " ").slice(0, MAX_NAME);
+        if (!nombre) { err.textContent = "Escribe un nombre."; err.hidden = false; input.focus(); return; }
+        if (model(mod).active.some(p => norm(p.nombre) === norm(nombre))) { err.textContent = `${nombre} ya está en este departamento.`; err.hidden = false; input.focus(); return; }
+        addPerson(mod, nombre); closeDialog();
+      } },
+      h("h2", {}, `Añadir persona · ${MODULES.find(m => m.key === mod).name}`),
+      h("div", { class: "field" }, h("label", { for: "nuevo-nombre" }, "Nombre:"), input),
+      err,
+      h("button", { type: "submit", class: "primary block" }, "Agregar"),
+      h("button", { type: "button", class: "ghost", onclick: closeDialog }, "Cancelar"));
+    openDialog(form);
+    input.focus();
+  }
+
+  function openMinus(p) {
+    modal = { kind: "minus", mod: p.mod, pid: p.id, confirm: null };
+    renderMinus();
+  }
+  // Lista numerada de las incidencias de la persona. Se vuelve a pintar con cada
+  // cambio, así la numeración se corrige sola al quitar una.
+  function renderMinus() {
+    const M = model(modal.mod);
+    const p = M.persons.find(x => x.id === modal.pid);
+    if (!p) return closeDialog();
+    const items = p.events.map((ev, i) => {
+      const n = i + 1;
+      const title = ev.razon || `Incidencia ${n}`;
+      const meta = (ev.razon ? `Incidencia ${n} · ` : "") + when(ev.t);
+      const actions = modal.confirm === ev.id
+        ? h("div", { class: "inc-actions" },
+            h("button", { type: "button", class: "danger", onclick: () => { removeEvent(p.mod, ev.id); modal.confirm = null; } }, "Sí, quitar"),
+            h("button", { type: "button", class: "ghost", onclick: () => { modal.confirm = null; renderMinus(); } }, "No"))
+        : h("div", { class: "inc-actions" },
+            h("button", { type: "button", class: "ghost", onclick: () => { modal.confirm = ev.id; renderMinus(); } }, "Quitar"));
+      return h("li", {}, h("div", { class: "inc-text" }, h("span", { class: "inc-title" }, title), h("span", { class: "inc-meta" }, meta)), actions);
+    });
+    openDialog(h("div", { class: "modal" },
+      h("h2", {}, `¿Qué incidencia quitar? · ${p.nombre}`),
+      items.length ? h("ul", { class: "inc-list" }, items) : h("p", { class: "hint" }, `${p.nombre} no tiene incidencias.`),
+      h("div", { class: "modal-actions" }, h("button", { type: "button", class: "ghost", onclick: closeDialog }, "Cerrar"))));
   }
 
   // ---- navegación ----
@@ -352,10 +549,55 @@
     );
   }
 
+  const personLabel = p => p.activo ? p.nombre : `${p.nombre} (retirado)`;
   function leaderText(persons, field) {
     const max = Math.max(0, ...persons.map(p => p[field]));
-    const names = max > 0 ? persons.filter(p => p[field] === max).map(p => p.activo ? p.nombre : `${p.nombre} (retirado)`) : [];
+    const names = max > 0 ? persons.filter(p => p[field] === max).map(personLabel) : [];
     return names.length ? `${names.join(", ")} (${max})` : "—";
+  }
+
+  // Reporte diario / semanal / mensual. Con varios departamentos añade su columna.
+  function renderReport(mods) {
+    if (!report.anchor) report.anchor = today();
+    const { start, end, label } = periodRange(report.kind, report.anchor);
+    const multi = mods.length > 1;
+    const models = mods.map(k => ({ key: k, name: MODULES.find(m => m.key === k).name, M: model(k) }));
+    const evs = models.flatMap(x => x.M.events.map(ev => ({ ...ev, depto: x.name })))
+      .filter(ev => { const k = dayKey(ev.t); return k >= start && k <= end; })
+      .sort((a, b) => b.t - a.t);
+
+    const perPerson = new Map();
+    for (const ev of evs) {
+      const r = perPerson.get(ev.persona) || { p: ev.persona, depto: ev.depto, n: 0, conRazon: 0 };
+      r.n++; if (ev.razon) r.conRazon++;
+      perPerson.set(ev.persona, r);
+    }
+    const rows = [...perPerson.values()].sort((a, b) => b.n - a.n || a.p.nombre.localeCompare(b.p.nombre));
+    const setKind = kind => { report.kind = kind; render(); };
+    const kinds = [["dia", "Diario"], ["semana", "Semanal"], ["mes", "Mensual"]];
+
+    return h("div", { class: "section" },
+      h("div", { class: "section-head" }, h("h3", {}, "Reportes")),
+      h("div", { class: "report-nav" },
+        h("div", { class: "seg", role: "group", "aria-label": "Tipo de reporte" },
+          kinds.map(([k, txt]) => h("button", { type: "button", "aria-pressed": String(report.kind === k), onclick: () => setKind(k) }, txt))),
+        h("button", { type: "button", class: "icon-btn", "aria-label": "Periodo anterior", onclick: () => { report.anchor = shiftPeriod(report.kind, report.anchor, -1); render(); } }, "‹"),
+        h("span", { class: "period" }, label),
+        h("button", { type: "button", class: "icon-btn", "aria-label": "Periodo siguiente", onclick: () => { report.anchor = shiftPeriod(report.kind, report.anchor, 1); render(); } }, "›"),
+        h("button", { type: "button", class: "ghost", onclick: () => { report.anchor = today(); render(); } }, "Actual")),
+      evs.length
+        ? [
+            h("div", { class: "table-wrap" }, h("table", {},
+              h("thead", {}, h("tr", {}, multi ? h("th", {}, "Departamento") : null, h("th", {}, "Persona"), h("th", { class: "num" }, "Incidencias"), h("th", { class: "num" }, "Con razón"))),
+              h("tbody", {}, rows.map(r => h("tr", {}, multi ? h("td", {}, r.depto) : null, h("td", {}, personLabel(r.p)), h("td", { class: "num" }, String(r.n)), h("td", { class: "num" }, String(r.conRazon))))),
+              h("tfoot", {}, h("tr", {}, multi ? h("th", {}) : null, h("th", {}, "Total"), h("th", { class: "num" }, String(evs.length)), h("th", { class: "num" }, String(evs.filter(e => e.razon).length)))))),
+            h("div", { class: "table-wrap days" }, h("table", {},
+              h("thead", {}, h("tr", {}, h("th", {}, "Fecha y hora"), multi ? h("th", {}, "Departamento") : null, h("th", {}, "Persona"), h("th", {}, "Razón"))),
+              h("tbody", {}, evs.map(ev => h("tr", {},
+                h("td", {}, when(ev.t)), multi ? h("td", {}, ev.depto) : null, h("td", {}, personLabel(ev.persona)),
+                ev.razon ? h("td", { class: "reason" }, ev.razon) : h("td", { class: "reason muted" }, "Sin razón indicada"))))))
+          ]
+        : h("div", { class: "empty" }, `Sin incidencias en este periodo (${label}).`));
   }
 
   function renderSummary() {
@@ -380,14 +622,18 @@
       ),
       h("footer", {},
         h("span", { class: "total" }, "Total histórico: ", h("b", {}, String(grandHist))),
-        h("span", { class: "total" }, "Hoy: ", h("b", {}, String(grandHoy))))
+        h("span", { class: "total" }, "Hoy: ", h("b", {}, String(grandHoy)))),
+      renderReport(MODULES.map(m => m.key))
     );
   }
 
   function renderCards(mod, M) {
     const max = Math.max(0, ...M.active.map(p => p.total));
     const leaders = M.active.filter(p => max > 0 && p.total === max);
-    return M.active.map(p => {
+    const q = norm(search[mod] || "");
+    const shown = q ? M.active.filter(p => norm(p.nombre).includes(q)) : M.active;
+    if (!shown.length) return h("div", { class: "empty" }, `Nadie coincide con «${search[mod]}».`);
+    return h("div", { class: "board" }, shown.map(p => {
       const lead = leaders.includes(p);
       const key = mod + "/" + p.id;
       const countEl = h("div", { class: "count", "aria-live": "polite" }, String(p.total), h("small", {}, "en total"));
@@ -407,25 +653,23 @@
         h("div", { class: "stats" }, h("span", { class: "chip" }, "Hoy ", h("b", {}, String(p.hoy)))),
         h("div", { class: "last" }, ago(p.last)),
         h("div", { class: "btns" },
-          h("button", { class: "minus", title: "Quita la última incidencia de hoy", "aria-label": `Quitar la última incidencia de hoy a ${p.nombre}`, disabled: !loaded || p.hoy === 0, onclick: () => minus(mod, p) }, "−"),
-          h("button", { class: "plus", disabled: !loaded, onclick: () => plus(mod, p.id) }, "+1 incidencia")),
+          h("button", { class: "minus", title: "Elegir qué incidencia quitar", "aria-label": `Quitar una incidencia a ${p.nombre}`, disabled: !loaded || p.total === 0, onclick: () => openMinus(p) }, "−"),
+          h("button", { class: "plus", disabled: !loaded, onclick: () => openPlus(p) }, "+1 incidencia")),
         removeArea);
-    });
+    }));
   }
 
   function renderHistory(mod, M) {
-    // columnas: personas activas y también las retiradas que tengan incidencias
     const cols = M.persons.filter(p => p.activo || p.total > 0);
     const keys = Object.keys(M.days).sort().reverse();
     const td = today();
     if (!keys.includes(td)) keys.unshift(td);
     const sel = selectedDay[mod] && keys.includes(selectedDay[mod]) ? selectedDay[mod] : keys[0];
-    const colName = p => p.activo ? p.nombre : `${p.nombre} (retirado)`;
     const cell = n => h("td", { class: "num" + (n ? "" : " zero") }, String(n || 0));
 
     const dayTable = h("div", { class: "table-wrap days" },
       h("table", {},
-        h("thead", {}, h("tr", {}, h("th", {}, "Día"), cols.map(p => h("th", { class: "num" }, colName(p))), h("th", { class: "num" }, "Total"))),
+        h("thead", {}, h("tr", {}, h("th", {}, "Día"), cols.map(p => h("th", { class: "num" }, personLabel(p))), h("th", { class: "num" }, "Total"))),
         h("tbody", {}, keys.map(k => {
           const d = M.days[k] || { _total: 0 };
           return h("tr", { class: k === sel ? "sel" : "" },
@@ -442,7 +686,7 @@
     const hourTable = hours.length
       ? h("div", { class: "table-wrap" },
           h("table", {},
-            h("thead", {}, h("tr", {}, h("th", {}, "Hora (Perú)"), cols.map(p => h("th", { class: "num" }, colName(p))), h("th", {}, "Total"))),
+            h("thead", {}, h("tr", {}, h("th", {}, "Hora (Perú)"), cols.map(p => h("th", { class: "num" }, personLabel(p))), h("th", {}, "Total"))),
             h("tbody", {}, hours.map(hr => {
               const hh = dsel.hours[hr];
               return h("tr", {}, h("td", {}, hourLabel(hr)), cols.map(p => cell(hh[p.id])),
@@ -464,37 +708,42 @@
     const m = MODULES.find(x => x.key === mod);
     const M = model(mod);
 
-    const input = h("input", { id: "add-" + mod, type: "text", maxlength: String(MAX_NAME), placeholder: "Nombre de la persona", "aria-label": "Nombre de la persona", autocomplete: "off" });
-    const form = h("form", { class: "add", onsubmit: e => { e.preventDefault(); addPerson(mod, input.value); input.value = ""; input.focus(); } },
-      input, h("button", { class: "primary", type: "submit", disabled: !loaded }, "Añadir persona"));
+    const finder = h("input", { id: "buscar-" + mod, type: "search", placeholder: "Buscar persona…", "aria-label": "Buscar persona", autocomplete: "off",
+      oninput: e => { search[mod] = e.target.value; render(); } });
+    finder.value = search[mod] || "";
 
     return h("section", { class: "wrap", style: "padding:0" },
-      h("div", { class: "module-head" }, h("h2", {}, m.name), form),
+      h("div", { class: "module-head" }, h("h2", {}, m.name),
+        h("div", { class: "add" }, finder, h("button", { class: "primary", type: "button", disabled: !loaded, onclick: () => openAdd(mod) }, "Añadir persona"))),
       M.active.length
-        ? h("div", { class: "board" }, renderCards(mod, M))
-        : h("div", { class: "empty" }, loaded ? `Todavía no hay nadie en ${m.name}. Escribe un nombre arriba y pulsa «Añadir persona».` : "Cargando…"),
+        ? renderCards(mod, M)
+        : h("div", { class: "empty" }, loaded ? `Todavía no hay nadie en ${m.name}. Pulsa «Añadir persona» para empezar.` : "Cargando…"),
       h("footer", {},
         h("span", { class: "total" }, `Total histórico de ${m.name}: `, h("b", {}, String(M.totalHist))),
         h("span", { class: "total" }, "Hoy: ", h("b", {}, String(M.totalHoy))),
         h("span", { class: "note" }, "«Hoy» vuelve a 0 cada día a las 00:00 (hora de Perú). Todo queda en el histórico.")),
-      ...renderHistory(mod, M)
+      ...renderHistory(mod, M),
+      renderReport([mod])
     );
   }
 
   function render() {
-    // conservar lo que se está escribiendo y la posición del histórico
+    // conservar lo que se está escribiendo y la posición de las tablas con scroll
     const focused = document.activeElement;
-    const keepId = focused && focused.tagName === "INPUT" ? focused.id : null;
+    const keepId = focused && focused.tagName === "INPUT" && !dlg.contains(focused) ? focused.id : null;
     const keepVal = keepId ? focused.value : null;
-    const daysEl = document.querySelector(".days");
-    const daysScroll = daysEl ? daysEl.scrollTop : 0;
+    const keepSel = keepId ? [focused.selectionStart, focused.selectionEnd] : null;
+    const scrolls = [...document.querySelectorAll("#view .days")].map(el => el.scrollTop);
 
     renderTabs();
     $("view").replaceChildren(active === SUMMARY ? renderSummary() : renderModule(active));
 
-    if (keepId && $(keepId)) { $(keepId).value = keepVal; $(keepId).focus(); }
-    const newDays = document.querySelector(".days");
-    if (newDays) newDays.scrollTop = daysScroll;
+    if (keepId && $(keepId)) {
+      const el = $(keepId); el.value = keepVal; el.focus();
+      try { el.setSelectionRange(...keepSel); } catch (e) {}
+    }
+    document.querySelectorAll("#view .days").forEach((el, i) => { if (scrolls[i]) el.scrollTop = scrolls[i]; });
+    if (modal?.kind === "minus" && dlg.open) renderMinus();
 
     const status = $("status");
     if (!loaded) { status.dataset.mode = "connecting"; $("status-text").textContent = "Conectando…"; }
@@ -502,13 +751,13 @@
     else { status.dataset.mode = "offline"; $("status-text").textContent = "Sin conexión"; }
   }
 
-  onValue(ref(db, "equipos"), snap => { data = snap.val() || {}; loaded = true; render(); }, fail);
+  onValue(ref(db, "equipos"), snap => { data = snap.val() || {}; loaded = true; render(); migrateLegacy(); }, fail);
   onValue(ref(db, ".info/connected"), snap => { connected = snap.val() === true; render(); });
   onValue(ref(db, ".info/serverTimeOffset"), snap => { serverOffset = Number(snap.val()) || 0; });
 
   active = fromHash();
   // repinta cada 30 s para «hace X min» y para el cambio de día a medianoche
-  setInterval(() => { if (!pendingRemove) render(); }, 30000);
+  setInterval(() => { if (!pendingRemove && !dlg.open) render(); }, 30000);
   render();
 </script>
 </body>
