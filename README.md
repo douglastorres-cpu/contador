@@ -38,4 +38,4 @@ Sistemas, Comercial, Marketing, Captación, Ventas y Alquiler. Cada uno tiene su
 
 En la consola de Firebase: **Realtime Database → Reglas**, sustituye el contenido por el de `database.rules.json` y pulsa **Publicar**.
 
-Estas reglas solo dejan leer y escribir los seis departamentos. Las personas no se pueden borrar (solo retirar) y las incidencias solo se pueden crear o quitar, no modificar, así que el histórico no se puede alterar desde la página. Cualquiera que tenga el enlace puede añadir personas y registrar incidencias.
+Estas reglas solo dejan leer y escribir los seis departamentos. Las personas no se pueden borrar (solo retirar) y las incidencias solo se pueden crear o quitar, no modificar. La página solo deja quitar incidencias de hoy, pero las reglas no lo impiden para días anteriores: alguien con conocimientos técnicos podría borrar incidencias antiguas directamente en la base de datos. Cualquiera que tenga el enlace puede añadir personas y registrar incidencias.
