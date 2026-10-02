@@ -156,6 +156,25 @@
   .bump { animation: bump .25s ease; }
   @keyframes bump { 50% { transform: scale(1.15); } }
   @media (prefers-reduced-motion: reduce) { .bump { animation: none; } button { transition: none; } }
+  /* Histórico */
+  .stats { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .stats .label { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .chip {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    border: 2px solid var(--line); border-radius: 999px; padding: 2px 10px;
+    font-size: .8rem; font-weight: 700; color: var(--ink); background: var(--bg);
+  }
+  .chip b { font-family: var(--font-num); font-size: .95rem; }
+  .section { display: flex; flex-direction: column; gap: 10px; }
+  .section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+  h3 { margin: 0; font-size: 1rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+  .days { max-height: 440px; overflow: auto; }
+  thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
+  tr.sel td { background: var(--lead-bg); }
+  .daybtn { background: transparent; color: var(--ink); padding: 0; font-weight: 700; text-decoration: underline; text-align: left; }
+  td.zero { color: var(--muted); }
+  tfoot th { color: var(--ink); font-size: .85rem; border-top: 2px solid var(--line); }
+  .bar { display: inline-block; height: 10px; border-radius: 2px; background: var(--hazard); vertical-align: middle; margin-right: 8px; }
 </style>
 </head>
 <body>
@@ -165,7 +184,7 @@
   <header>
     <div>
       <h1>Registro de Incidencias</h1>
-      <p class="sub">Seguimiento en tiempo real de incidencias por departamento.</p>
+      <p class="sub">Seguimiento en tiempo real de incidencias por departamento. Horario de Perú.</p>
     </div>
     <span class="status" id="status" data-mode="connecting"><span class="dot"></span><span id="status-text">Conectando…</span></span>
   </header>
@@ -178,7 +197,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getDatabase, ref, onValue, update, set, push, remove, runTransaction, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+  import { getDatabase, ref, onValue, update, set, push, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
   // Configuración pública del proyecto de Firebase (no es secreta: la seguridad
   // la ponen las reglas de la base de datos, ver database.rules.json).
@@ -204,16 +223,33 @@
   const SUMMARY = "resumen";
   const MAX_NAME = 40;
 
+  // Hora de Perú: UTC-5 todo el año (no hay horario de verano). El día va de
+  // 00:00 a 00:00 hora de Perú; el contador de «Hoy» empieza de cero cada día
+  // y todo queda guardado en el histórico.
+  const PERU_OFFSET_MS = -5 * 3600 * 1000;
+  const peru = t => new Date(t + PERU_OFFSET_MS);
+  const dayKey = t => peru(t).toISOString().slice(0, 10);   // "2026-10-02"
+  const hourOf = t => peru(t).getUTCHours();
+  const fmtDay = new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+  const dayLabel = key => fmtDay.format(new Date(key + "T12:00:00Z"));
+  const pad = n => String(n).padStart(2, "0");
+  const hourLabel = hr => `${pad(hr)}:00 – ${pad((hr + 1) % 24)}:00`;
+
   const db = getDatabase(initializeApp(firebaseConfig));
 
-  let data = {};          // { modulo: { personas: { id: {nombre, count, last, creado} } } }
+  // equipos/<modulo>/personas/<id> = { nombre, creado, activo? }
+  // equipos/<modulo>/eventos/<id>  = { persona, t }   (una incidencia cada uno)
+  let data = {};
   let loaded = false;
   let connected = false;
   let serverOffset = 0;
   let active = SUMMARY;
-  let pendingRemove = null; // id de la persona con confirmación de borrado abierta
-  let pendingReset = false;
-  let lastCounts = {};      // para animar solo lo que cambia
+  let pendingRemove = null;
+  let selectedDay = {};     // modulo -> día elegido en el histórico
+  let lastShown = {};       // para animar solo lo que cambia
+
+  const now = () => Date.now() + serverOffset;
+  const today = () => dayKey(now());
 
   const $ = id => document.getElementById(id);
   const h = (tag, attrs = {}, ...kids) => {
@@ -228,16 +264,38 @@
     return el;
   };
 
-  function people(mod) {
-    const ps = data[mod]?.personas || {};
-    return Object.entries(ps)
-      .map(([id, p]) => ({ id, nombre: String(p.nombre || "Sin nombre"), count: Math.max(0, Number(p.count) || 0), last: Number(p.last) || 0, creado: Number(p.creado) || 0 }))
+  // ---- datos derivados ----
+  function model(mod) {
+    const raw = data[mod] || {};
+    const td = today();
+    const persons = Object.entries(raw.personas || {})
+      .map(([id, p]) => ({ id, nombre: String(p.nombre || "Sin nombre"), creado: Number(p.creado) || 0, activo: p.activo !== false, total: 0, hoy: 0, last: 0, lastTodayEvent: null }))
       .sort((a, b) => a.creado - b.creado || a.id.localeCompare(b.id));
+    const byId = Object.fromEntries(persons.map(p => [p.id, p]));
+    const days = {};   // dayKey -> { personId: n, _total: n, hours: { hr: { personId: n, _total } } }
+    for (const [eid, e] of Object.entries(raw.eventos || {})) {
+      const p = byId[e.persona]; const t = Number(e.t);
+      if (!p || !t) continue;
+      p.total++;
+      if (t > p.last) p.last = t;
+      const dk = dayKey(t), hr = hourOf(t);
+      if (dk === td) {
+        p.hoy++;
+        if (!p.lastTodayEvent || t > p.lastTodayEvent.t) p.lastTodayEvent = { id: eid, t };
+      }
+      const d = days[dk] ||= { _total: 0, hours: {} };
+      d[p.id] = (d[p.id] || 0) + 1; d._total++;
+      const hh = d.hours[hr] ||= { _total: 0 };
+      hh[p.id] = (hh[p.id] || 0) + 1; hh._total++;
+    }
+    const totalHist = persons.reduce((s, p) => s + p.total, 0);
+    const totalHoy = persons.reduce((s, p) => s + p.hoy, 0);
+    return { persons, active: persons.filter(p => p.activo), days, totalHist, totalHoy };
   }
 
   function ago(t) {
-    if (!t) return "";
-    const s = Math.max(0, Math.round((Date.now() + serverOffset - t) / 1000));
+    if (!t) return "Sin incidencias";
+    const s = Math.max(0, Math.round((now() - t) / 1000));
     if (s < 60) return "Última: hace un momento";
     const m = Math.round(s / 60);
     if (m < 60) return `Última: hace ${m} min`;
@@ -255,34 +313,27 @@
   const ok = () => { $("note").textContent = ""; };
 
   // ---- acciones ----
-  const personRef = (mod, id) => ref(db, `equipos/${mod}/personas/${id}`);
-
   function plus(mod, id) {
-    update(personRef(mod, id), { count: increment(1), last: serverTimestamp() }).then(ok, fail);
+    set(push(ref(db, `equipos/${mod}/eventos`)), { persona: id, t: serverTimestamp() }).then(ok, fail);
   }
-  function minus(mod, id) {
-    runTransaction(ref(db, `equipos/${mod}/personas/${id}/count`), v => Math.max(0, (Number(v) || 0) - 1)).then(ok, fail);
+  // Restar quita la última incidencia de hoy de esa persona (los días pasados no se tocan).
+  function minus(mod, p) {
+    if (p.lastTodayEvent) remove(ref(db, `equipos/${mod}/eventos/${p.lastTodayEvent.id}`)).then(ok, fail);
   }
   function addPerson(mod, nombre) {
     nombre = nombre.trim().replace(/\s+/g, " ").slice(0, MAX_NAME);
     if (!nombre) return;
-    set(push(ref(db, `equipos/${mod}/personas`)), { nombre, count: 0, creado: serverTimestamp() }).then(ok, fail);
+    set(push(ref(db, `equipos/${mod}/personas`)), { nombre, creado: serverTimestamp(), activo: true }).then(ok, fail);
   }
-  function removePerson(mod, id) {
+  // Quitar a una persona la oculta del marcador pero conserva su histórico.
+  function archivePerson(mod, id) {
     pendingRemove = null;
-    remove(personRef(mod, id)).then(ok, fail);
-  }
-  function resetModule(mod) {
-    pendingReset = false;
-    const changes = {};
-    for (const p of people(mod)) { changes[`personas/${p.id}/count`] = 0; changes[`personas/${p.id}/last`] = null; }
-    if (Object.keys(changes).length) update(ref(db, `equipos/${mod}`), changes).then(ok, fail);
-    else render();
+    update(ref(db, `equipos/${mod}/personas/${id}`), { activo: false }).then(ok, fail);
   }
 
   // ---- navegación ----
   function go(key) {
-    active = key; pendingRemove = null; pendingReset = false;
+    active = key; pendingRemove = null;
     try { history.replaceState(null, "", "#" + key); } catch (e) {}
     render();
   }
@@ -294,64 +345,58 @@
 
   // ---- pintado ----
   function renderTabs() {
-    const tabs = $("tabs");
-    tabs.replaceChildren(
+    $("tabs").replaceChildren(
       h("button", { class: "tab", role: "tab", "aria-selected": String(active === SUMMARY), onclick: () => go(SUMMARY) }, "Resumen"),
-      ...MODULES.map(m => {
-        const total = people(m.key).reduce((s, p) => s + p.count, 0);
-        return h("button", { class: "tab", role: "tab", "aria-selected": String(active === m.key), onclick: () => go(m.key) },
-          m.name, h("span", { class: "n" }, String(total)));
-      })
+      ...MODULES.map(m => h("button", { class: "tab", role: "tab", "aria-selected": String(active === m.key), onclick: () => go(m.key) },
+        m.name, h("span", { class: "n", title: "Total histórico" }, String(model(m.key).totalHist))))
     );
+  }
+
+  function leaderText(persons, field) {
+    const max = Math.max(0, ...persons.map(p => p[field]));
+    const names = max > 0 ? persons.filter(p => p[field] === max).map(p => p.activo ? p.nombre : `${p.nombre} (retirado)`) : [];
+    return names.length ? `${names.join(", ")} (${max})` : "—";
   }
 
   function renderSummary() {
-    const rows = MODULES.map(m => {
-      const ps = people(m.key);
-      const total = ps.reduce((s, p) => s + p.count, 0);
-      const max = Math.max(0, ...ps.map(p => p.count));
-      const leaders = max > 0 ? ps.filter(p => p.count === max).map(p => p.nombre) : [];
-      return { m, total, n: ps.length, leader: leaders.length ? `${leaders.join(", ")} (${max})` : "—" };
-    });
-    const grand = rows.reduce((s, r) => s + r.total, 0);
+    const rows = MODULES.map(m => ({ m, ...model(m.key) }));
+    const grandHist = rows.reduce((s, r) => s + r.totalHist, 0);
+    const grandHoy = rows.reduce((s, r) => s + r.totalHoy, 0);
     return h("section", { class: "wrap", style: "padding:0" },
-      h("div", { class: "module-head" }, h("h2", {}, "Resumen general")),
+      h("div", { class: "section-head" }, h("h2", {}, "Resumen general"), h("span", { class: "note" }, `Hoy es ${dayLabel(today())} (hora de Perú)`)),
       h("div", { class: "table-wrap" },
         h("table", {},
           h("thead", {}, h("tr", {},
-            h("th", {}, "Departamento"), h("th", { class: "num" }, "Personas"), h("th", { class: "num" }, "Incidencias"), h("th", {}, "Más incidencias"))),
+            h("th", {}, "Departamento"), h("th", { class: "num" }, "Personas"),
+            h("th", { class: "num" }, "Histórico"), h("th", { class: "num" }, "Hoy"),
+            h("th", {}, "Más incidencias (histórico)"))),
           h("tbody", {}, rows.map(r => h("tr", {},
             h("td", {}, h("a", { href: "#" + r.m.key }, r.m.name)),
-            h("td", { class: "num" }, String(r.n)),
-            h("td", { class: "num" }, String(r.total)),
-            h("td", {}, r.leader))))
+            h("td", { class: "num" }, String(r.active.length)),
+            h("td", { class: "num" }, String(r.totalHist)),
+            h("td", { class: "num" }, String(r.totalHoy)),
+            h("td", {}, leaderText(r.persons, "total")))))
         )
       ),
-      h("footer", {}, h("span", { class: "total" }, "Total de incidencias: ", h("b", {}, String(grand))))
+      h("footer", {},
+        h("span", { class: "total" }, "Total histórico: ", h("b", {}, String(grandHist))),
+        h("span", { class: "total" }, "Hoy: ", h("b", {}, String(grandHoy))))
     );
   }
 
-  function renderModule(mod) {
-    const m = MODULES.find(x => x.key === mod);
-    const ps = people(mod);
-    const max = Math.max(0, ...ps.map(p => p.count));
-    const leaders = ps.filter(p => max > 0 && p.count === max);
-    const total = ps.reduce((s, p) => s + p.count, 0);
-
-    const input = h("input", { id: "add-" + mod, type: "text", maxlength: String(MAX_NAME), placeholder: "Nombre de la persona", "aria-label": "Nombre de la persona", autocomplete: "off" });
-    const form = h("form", { class: "add", onsubmit: e => { e.preventDefault(); addPerson(mod, input.value); input.value = ""; input.focus(); } },
-      input, h("button", { class: "primary", type: "submit", disabled: !loaded }, "Añadir persona"));
-
-    const cards = ps.map(p => {
+  function renderCards(mod, M) {
+    const max = Math.max(0, ...M.active.map(p => p.total));
+    const leaders = M.active.filter(p => max > 0 && p.total === max);
+    return M.active.map(p => {
       const lead = leaders.includes(p);
-      const countEl = h("div", { class: "count", "aria-live": "polite" }, String(p.count));
       const key = mod + "/" + p.id;
-      if (lastCounts[key] !== undefined && lastCounts[key] !== p.count) countEl.classList.add("bump");
-      lastCounts[key] = p.count;
+      const countEl = h("div", { class: "count", "aria-live": "polite" }, String(p.total), h("small", {}, "en total"));
+      if (lastShown[key] !== undefined && lastShown[key] !== p.total) countEl.classList.add("bump");
+      lastShown[key] = p.total;
 
       const removeArea = pendingRemove === p.id
-        ? h("div", { class: "remove-area" }, h("span", {}, `¿Quitar a ${p.nombre}?`),
-            h("button", { class: "danger", onclick: () => removePerson(mod, p.id) }, "Sí, quitar"),
+        ? h("div", { class: "remove-area" }, h("span", {}, `¿Quitar a ${p.nombre}? Su histórico se conserva.`),
+            h("button", { class: "danger", onclick: () => archivePerson(mod, p.id) }, "Sí, quitar"),
             h("button", { class: "ghost", onclick: () => { pendingRemove = null; render(); } }, "Cancelar"))
         : h("button", { class: "link", onclick: () => { pendingRemove = p.id; render(); } }, "Quitar persona");
 
@@ -359,38 +404,97 @@
         h("div", { class: "row" }, h("span", { class: "name" }, p.nombre),
           lead ? h("span", { class: "tag" }, leaders.length > 1 ? "Empate" : "Más incidencias") : null),
         countEl,
+        h("div", { class: "stats" }, h("span", { class: "chip" }, "Hoy ", h("b", {}, String(p.hoy)))),
         h("div", { class: "last" }, ago(p.last)),
         h("div", { class: "btns" },
-          h("button", { class: "minus", "aria-label": `Restar una incidencia a ${p.nombre}`, disabled: !loaded || p.count === 0, onclick: () => minus(mod, p.id) }, "−"),
+          h("button", { class: "minus", title: "Quita la última incidencia de hoy", "aria-label": `Quitar la última incidencia de hoy a ${p.nombre}`, disabled: !loaded || p.hoy === 0, onclick: () => minus(mod, p) }, "−"),
           h("button", { class: "plus", disabled: !loaded, onclick: () => plus(mod, p.id) }, "+1 incidencia")),
         removeArea);
     });
+  }
 
-    const resetArea = pendingReset
-      ? h("div", { class: "reset-area" }, h("span", { class: "note" }, `¿Poner a 0 todo ${m.name}?`),
-          h("button", { class: "danger", onclick: () => resetModule(mod) }, "Sí, reiniciar"),
-          h("button", { class: "ghost", onclick: () => { pendingReset = false; render(); } }, "Cancelar"))
-      : h("div", { class: "reset-area" }, h("button", { class: "ghost", disabled: !loaded || total === 0, onclick: () => { pendingReset = true; render(); } }, "Reiniciar a 0"));
+  function renderHistory(mod, M) {
+    // columnas: personas activas y también las retiradas que tengan incidencias
+    const cols = M.persons.filter(p => p.activo || p.total > 0);
+    const keys = Object.keys(M.days).sort().reverse();
+    const td = today();
+    if (!keys.includes(td)) keys.unshift(td);
+    const sel = selectedDay[mod] && keys.includes(selectedDay[mod]) ? selectedDay[mod] : keys[0];
+    const colName = p => p.activo ? p.nombre : `${p.nombre} (retirado)`;
+    const cell = n => h("td", { class: "num" + (n ? "" : " zero") }, String(n || 0));
+
+    const dayTable = h("div", { class: "table-wrap days" },
+      h("table", {},
+        h("thead", {}, h("tr", {}, h("th", {}, "Día"), cols.map(p => h("th", { class: "num" }, colName(p))), h("th", { class: "num" }, "Total"))),
+        h("tbody", {}, keys.map(k => {
+          const d = M.days[k] || { _total: 0 };
+          return h("tr", { class: k === sel ? "sel" : "" },
+            h("td", {}, h("button", { class: "daybtn", onclick: () => { selectedDay[mod] = k; render(); } }, k === td ? `Hoy · ${dayLabel(k)}` : dayLabel(k))),
+            cols.map(p => cell(d[p.id])),
+            cell(d._total));
+        })),
+        h("tfoot", {}, h("tr", {}, h("th", {}, "Total histórico"), cols.map(p => h("th", { class: "num" }, String(p.total))), h("th", { class: "num" }, String(M.totalHist))))
+      ));
+
+    const dsel = M.days[sel];
+    const hours = dsel ? Object.keys(dsel.hours).map(Number).sort((a, b) => a - b) : [];
+    const maxHour = Math.max(1, ...hours.map(hr => dsel.hours[hr]._total));
+    const hourTable = hours.length
+      ? h("div", { class: "table-wrap" },
+          h("table", {},
+            h("thead", {}, h("tr", {}, h("th", {}, "Hora (Perú)"), cols.map(p => h("th", { class: "num" }, colName(p))), h("th", {}, "Total"))),
+            h("tbody", {}, hours.map(hr => {
+              const hh = dsel.hours[hr];
+              return h("tr", {}, h("td", {}, hourLabel(hr)), cols.map(p => cell(hh[p.id])),
+                h("td", {}, h("span", { class: "bar", style: `width:${Math.round(hh._total / maxHour * 80)}px` }), String(hh._total)));
+            }))))
+      : h("div", { class: "empty" }, `Sin incidencias el ${dayLabel(sel)}.`);
+
+    return [
+      h("div", { class: "section" },
+        h("div", { class: "section-head" }, h("h3", {}, "Histórico por día"), h("span", { class: "note" }, "Pulsa un día para ver el detalle por hora.")),
+        cols.length ? dayTable : h("div", { class: "empty" }, "El histórico aparecerá aquí cuando haya personas e incidencias.")),
+      h("div", { class: "section" },
+        h("div", { class: "section-head" }, h("h3", {}, `Por hora · ${sel === td ? "Hoy" : dayLabel(sel)}`)),
+        hourTable),
+    ];
+  }
+
+  function renderModule(mod) {
+    const m = MODULES.find(x => x.key === mod);
+    const M = model(mod);
+
+    const input = h("input", { id: "add-" + mod, type: "text", maxlength: String(MAX_NAME), placeholder: "Nombre de la persona", "aria-label": "Nombre de la persona", autocomplete: "off" });
+    const form = h("form", { class: "add", onsubmit: e => { e.preventDefault(); addPerson(mod, input.value); input.value = ""; input.focus(); } },
+      input, h("button", { class: "primary", type: "submit", disabled: !loaded }, "Añadir persona"));
 
     return h("section", { class: "wrap", style: "padding:0" },
       h("div", { class: "module-head" }, h("h2", {}, m.name), form),
-      ps.length
-        ? h("div", { class: "board" }, cards)
+      M.active.length
+        ? h("div", { class: "board" }, renderCards(mod, M))
         : h("div", { class: "empty" }, loaded ? `Todavía no hay nadie en ${m.name}. Escribe un nombre arriba y pulsa «Añadir persona».` : "Cargando…"),
-      h("footer", {}, h("span", { class: "total" }, `Total de ${m.name}: `, h("b", {}, String(total))), resetArea)
+      h("footer", {},
+        h("span", { class: "total" }, `Total histórico de ${m.name}: `, h("b", {}, String(M.totalHist))),
+        h("span", { class: "total" }, "Hoy: ", h("b", {}, String(M.totalHoy))),
+        h("span", { class: "note" }, "«Hoy» vuelve a 0 cada día a las 00:00 (hora de Perú). Todo queda en el histórico.")),
+      ...renderHistory(mod, M)
     );
   }
 
   function render() {
-    // conservar lo que se está escribiendo en el campo de añadir
+    // conservar lo que se está escribiendo y la posición del histórico
     const focused = document.activeElement;
     const keepId = focused && focused.tagName === "INPUT" ? focused.id : null;
     const keepVal = keepId ? focused.value : null;
+    const daysEl = document.querySelector(".days");
+    const daysScroll = daysEl ? daysEl.scrollTop : 0;
 
     renderTabs();
     $("view").replaceChildren(active === SUMMARY ? renderSummary() : renderModule(active));
 
     if (keepId && $(keepId)) { $(keepId).value = keepVal; $(keepId).focus(); }
+    const newDays = document.querySelector(".days");
+    if (newDays) newDays.scrollTop = daysScroll;
 
     const status = $("status");
     if (!loaded) { status.dataset.mode = "connecting"; $("status-text").textContent = "Conectando…"; }
@@ -403,7 +507,8 @@
   onValue(ref(db, ".info/serverTimeOffset"), snap => { serverOffset = Number(snap.val()) || 0; });
 
   active = fromHash();
-  setInterval(() => { if (!pendingRemove && !pendingReset) render(); }, 30000);
+  // repinta cada 30 s para «hace X min» y para el cambio de día a medianoche
+  setInterval(() => { if (!pendingRemove) render(); }, 30000);
   render();
 </script>
 </body>

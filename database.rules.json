@@ -8,19 +8,38 @@
         ".validate": "$modulo.matches(/^(sistemas|comercial|marketing|captacion|ventas|alquiler)$/)",
         "personas": {
           "$id": {
-            ".write": true,
-            ".validate": "newData.hasChildren(['nombre', 'count'])",
+            ".write": "newData.exists()",
+            ".validate": "newData.hasChildren(['nombre', 'creado'])",
             "nombre": {
               ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
             },
+            "creado": {
+              ".validate": "newData.isNumber()"
+            },
+            "activo": {
+              ".validate": "newData.isBoolean()"
+            },
             "count": {
-              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+              ".validate": "newData.isNumber()"
             },
             "last": {
               ".validate": "newData.isNumber()"
             },
-            "creado": {
-              ".validate": "newData.isNumber()"
+            "$otro": {
+              ".validate": false
+            }
+          }
+        },
+        "eventos": {
+          ".indexOn": ["t"],
+          "$id": {
+            ".write": "!data.exists() || !newData.exists()",
+            ".validate": "newData.hasChildren(['persona', 't'])",
+            "persona": {
+              ".validate": "newData.isString() && root.child('equipos').child($modulo).child('personas').child(newData.val()).exists()"
+            },
+            "t": {
+              ".validate": "newData.isNumber() && newData.val() <= now + 60000"
             },
             "$otro": {
               ".validate": false
