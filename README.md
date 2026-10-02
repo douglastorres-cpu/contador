@@ -9,7 +9,7 @@ Sistemas, Comercial, Marketing, Captación, Ventas y Alquiler. Cada uno tiene su
 ## Uso
 
 - **Buscar persona**: el campo de arriba filtra las tarjetas del departamento por nombre.
-- **Añadir persona**: abre una ventana para escribir el nombre; pulsa **Agregar**. Si esa persona estaba retirada, se reactiva con su histórico.
+- **Añadir persona**: abre una ventana para escribir el nombre; pulsa **Agregar**. Si ya existe alguien con ese nombre en el departamento (sin importar mayúsculas, tildes ni espacios), sale un aviso «Esta persona ya existe» y no se añade. Si estaba retirada, el aviso permite reactivarla con su histórico.
 - **+1 incidencia**: abre una ventana con el campo **Razón** (opcional) y la registra con su fecha y hora.
 - **−**: abre la lista numerada de incidencias de esa persona para elegir cuál quitar. Las que tienen razón se muestran con su razón; las demás como «Incidencia 1», «Incidencia 2»… La numeración se recalcula al quitar una.
 - Cada tarjeta muestra el **total histórico** en grande y el contador de **Hoy**.

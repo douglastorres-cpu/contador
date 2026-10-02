@@ -106,6 +106,8 @@
   dialog::backdrop { background: rgb(0 0 0 / .55); }
   .modal { display: flex; flex-direction: column; gap: 14px; padding: 20px; }
   .modal h2 { font-size: 1.1rem; overflow-wrap: anywhere; }
+  .modal p { margin: 0; line-height: 1.45; }
+  .modal.alert { border-top: 8px solid var(--hazard); }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label { font-weight: 700; font-size: .9rem; }
   .field input, .field textarea { width: 100%; }
@@ -359,7 +361,7 @@
     for (const kid of kids.flat()) if (kid != null) el.append(kid);
     return el;
   };
-  const norm = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+  const norm = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
   // ---- datos derivados ----
   function model(mod) {
@@ -421,9 +423,10 @@
     remove(ref(db, `equipos/${mod}/eventos/${eid}`)).then(ok, fail);
   }
   function addPerson(mod, nombre) {
-    const archived = model(mod).persons.find(p => !p.activo && norm(p.nombre) === norm(nombre));
-    if (archived) return update(ref(db, `equipos/${mod}/personas/${archived.id}`), { activo: true }).then(ok, fail);
     return set(push(ref(db, `equipos/${mod}/personas`)), { nombre, creado: serverTimestamp(), activo: true }).then(ok, fail);
+  }
+  function reactivatePerson(mod, id) {
+    return update(ref(db, `equipos/${mod}/personas/${id}`), { activo: true }).then(ok, fail);
   }
   // Quitar a una persona la oculta del marcador pero conserva su histórico.
   function archivePerson(mod, id) {
@@ -480,7 +483,7 @@
     ta.focus();
   }
 
-  function openAdd(mod) {
+  function openAdd(mod, initial = "") {
     modal = { kind: "add" };
     const input = h("input", { id: "nuevo-nombre", type: "text", maxlength: String(MAX_NAME), autocomplete: "off", placeholder: "Nombre y apellido" });
     const err = h("p", { class: "error", hidden: true });
@@ -488,7 +491,10 @@
         e.preventDefault();
         const nombre = input.value.trim().replace(/\s+/g, " ").slice(0, MAX_NAME);
         if (!nombre) { err.textContent = "Escribe un nombre."; err.hidden = false; input.focus(); return; }
-        if (model(mod).active.some(p => norm(p.nombre) === norm(nombre))) { err.textContent = `${nombre} ya está en este departamento.`; err.hidden = false; input.focus(); return; }
+        // Comprueba si ya existe en este departamento (sin distinguir mayúsculas,
+        // tildes ni espacios de más), incluidas las personas retiradas.
+        const existing = model(mod).persons.find(p => norm(p.nombre) === norm(nombre));
+        if (existing) return openExists(mod, existing, nombre);
         addPerson(mod, nombre); closeDialog();
       } },
       h("h2", {}, `Añadir persona · ${MODULES.find(m => m.key === mod).name}`),
@@ -496,8 +502,27 @@
       err,
       h("button", { type: "submit", class: "primary block" }, "Agregar"),
       h("button", { type: "button", class: "ghost", onclick: closeDialog }, "Cancelar"));
+    input.value = initial;
     openDialog(form);
     input.focus();
+  }
+
+  // Aviso cuando la persona ya existe en el departamento.
+  function openExists(mod, p, typed) {
+    modal = { kind: "exists" };
+    const depto = MODULES.find(m => m.key === mod).name;
+    const main = p.activo
+      ? h("button", { type: "button", class: "primary", onclick: closeDialog }, "Entendido")
+      : h("button", { type: "button", class: "plus", onclick: () => { reactivatePerson(mod, p.id); closeDialog(); } }, "Reactivar");
+    openDialog(h("div", { class: "modal alert", role: "alertdialog", "aria-labelledby": "existe-titulo", "aria-describedby": "existe-texto" },
+      h("h2", { id: "existe-titulo" }, "Esta persona ya existe"),
+      h("p", { id: "existe-texto" }, p.activo
+        ? `«${p.nombre}» ya está registrado en ${depto}. No se ha añadido otra vez.`
+        : `«${p.nombre}» ya existe en ${depto}, pero está retirado. Puedes reactivarlo y conservará su histórico.`),
+      h("div", { class: "modal-actions" },
+        h("button", { type: "button", class: "ghost", onclick: () => openAdd(mod, typed) }, "Escribir otro nombre"),
+        main)));
+    main.focus();
   }
 
   function openMinus(p) {
