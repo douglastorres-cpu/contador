@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Contador de Cagadas</title>
+<title>Registro de Incidencias</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;600;700&family=JetBrains+Mono:wght@700;800&display=swap">
 <style>
-  /* Layout: tablero de incidencias de obra — cabecera con cinta de seguridad, tres paneles de marcador en fila que se apilan en móvil. */
+  /* Layout: tablero de incidencias — cabecera, pestañas por departamento, paneles por persona que se apilan en móvil. */
   :root {
     --bg: #eceae4;
     --panel: #fbfaf7;
@@ -38,6 +38,7 @@
   }
   * { box-sizing: border-box; }
   body {
+    margin: 0;
     background: var(--bg);
     color: var(--ink);
     font-family: var(--font-body);
@@ -46,21 +47,22 @@
     padding-block: 0 40px;
   }
   .tape {
-    height: 14px;
+    height: 10px;
     margin-inline: -16px;
     background: repeating-linear-gradient(-45deg, var(--hazard) 0 18px, var(--hazard-ink) 18px 36px);
   }
-  .wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; padding-top: 28px; }
+  .wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; padding-top: 28px; }
   header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
   h1 {
     margin: 0;
     font-family: var(--font-display);
-    font-size: clamp(1.9rem, 6vw, 3rem);
+    font-size: clamp(1.8rem, 5.5vw, 2.8rem);
     line-height: .95;
     text-transform: uppercase;
     letter-spacing: -.01em;
     text-wrap: balance;
   }
+  h2 { margin: 0; font-family: var(--font-display); font-size: 1.3rem; text-transform: uppercase; }
   .sub { margin: 6px 0 0; color: var(--muted); }
   .status {
     display: inline-flex; align-items: center; gap: 8px;
@@ -71,51 +73,88 @@
   .status[data-mode="live"] .dot { background: var(--plus); box-shadow: 0 0 0 4px color-mix(in srgb, var(--plus) 25%, transparent); }
   .status[data-mode="offline"] .dot { background: var(--hazard); }
 
-  .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-  @media (max-width: 680px) { .board { grid-template-columns: 1fr; } }
+  /* Pestañas */
+  .tabs-scroll { overflow-x: auto; margin-inline: -16px; padding-inline: 16px; }
+  .tabs { display: flex; gap: 6px; border-bottom: 2px solid var(--line); min-width: max-content; }
+  .tab {
+    font: inherit; font-weight: 700; font-size: .9rem; cursor: pointer;
+    background: transparent; color: var(--muted); border: 0; border-bottom: 3px solid transparent;
+    padding: 10px 12px; margin-bottom: -2px; border-radius: 0; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--hazard); }
+  .tab .n { font-family: var(--font-num); font-size: .75rem; background: var(--line); color: var(--ink); border-radius: 10px; padding: 1px 7px; }
+
+  .module-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .add { display: flex; gap: 8px; flex-wrap: wrap; }
+  .add input {
+    font: inherit; padding: 9px 12px; border: 2px solid var(--line); border-radius: 5px;
+    background: var(--panel); color: var(--ink); min-width: 0; width: 220px; max-width: 100%;
+  }
+  .add input:focus-visible { outline: 3px solid var(--hazard); outline-offset: 1px; }
+
+  .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+  .empty {
+    border: 2px dashed var(--line); border-radius: 6px; padding: 28px 18px; text-align: center; color: var(--muted);
+  }
   .panel {
     background: var(--panel);
     border: 2px solid var(--line);
     border-radius: 6px;
-    padding: 18px;
+    padding: 16px;
     display: flex; flex-direction: column; gap: 10px;
     transition: background-color .2s, border-color .2s;
   }
   .panel.lead { background: var(--lead-bg); border-color: var(--hazard); }
   .row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 8px; }
-  .name { font-family: var(--font-display); font-size: 1.25rem; text-transform: uppercase; overflow-wrap: break-word; max-width: 100%; }
+  .name { font-family: var(--font-display); font-size: 1.15rem; text-transform: uppercase; overflow-wrap: break-word; max-width: 100%; }
   .tag {
-    font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
     background: var(--hazard); color: var(--hazard-ink); padding: 3px 7px; border-radius: 3px; white-space: nowrap;
   }
   .count {
     font-family: var(--font-num); font-weight: 800;
-    font-size: clamp(3.5rem, 12vw, 5rem); line-height: 1;
+    font-size: clamp(3rem, 10vw, 4.2rem); line-height: 1;
     font-variant-numeric: tabular-nums;
   }
+  .count small { font-family: var(--font-body); font-size: .85rem; font-weight: 600; color: var(--muted); margin-left: 6px; }
   .last { color: var(--muted); font-size: .85rem; min-height: 1.2em; }
   .btns { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
   button {
     font: inherit; cursor: pointer; border: 0; border-radius: 5px;
-    padding: 12px 10px; font-weight: 700; color: #fff;
+    padding: 11px 10px; font-weight: 700; color: #fff;
     transition: transform .08s, opacity .2s;
   }
-  button:focus-visible { outline: 3px solid var(--hazard); outline-offset: 2px; }
+  button:focus-visible, .tab:focus-visible { outline: 3px solid var(--hazard); outline-offset: 2px; }
   button:active:not(:disabled) { transform: scale(.96); }
   button:disabled { opacity: .35; cursor: not-allowed; }
-  .minus { background: var(--minus); font-size: 1.5rem; line-height: 1; }
-  .plus { background: var(--plus); font-size: 1rem; }
+  .minus { background: var(--minus); font-size: 1.4rem; line-height: 1; }
+  .plus { background: var(--plus); font-size: .95rem; }
+  .primary { background: var(--ink); color: var(--bg); padding: 9px 14px; font-size: .9rem; }
+  .ghost { background: transparent; color: var(--ink); border: 2px solid var(--line); padding: 8px 14px; font-size: .9rem; }
+  .danger { background: var(--minus); padding: 8px 14px; font-size: .9rem; }
+  .link { background: transparent; color: var(--muted); padding: 2px 0; font-size: .8rem; font-weight: 600; text-decoration: underline; justify-self: start; }
+  .remove-area { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .85rem; }
+  .remove-area .danger, .remove-area .ghost { padding: 5px 10px; font-size: .8rem; }
 
   footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; border-top: 2px solid var(--line); padding-top: 16px; }
   .total { font-weight: 600; }
   .total b { font-family: var(--font-num); }
   .reset-area { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .ghost { background: transparent; color: var(--ink); border: 2px solid var(--line); padding: 8px 14px; font-size: .9rem; }
-  .danger { background: var(--minus); padding: 8px 14px; font-size: .9rem; }
   .note { color: var(--muted); font-size: .85rem; margin: 0; }
 
+  /* Resumen */
+  .table-wrap { overflow-x: auto; border: 2px solid var(--line); border-radius: 6px; background: var(--panel); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  th { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  td.num, th.num { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  td a { color: var(--ink); font-weight: 700; }
+
   .bump { animation: bump .25s ease; }
-  @keyframes bump { 50% { transform: scale(1.18); } }
+  @keyframes bump { 50% { transform: scale(1.15); } }
   @media (prefers-reduced-motion: reduce) { .bump { animation: none; } button { transition: none; } }
 </style>
 </head>
@@ -125,31 +164,21 @@
 <div class="wrap">
   <header>
     <div>
-      <h1>Contador de Cagadas</h1>
-      <p class="sub">Registro oficial de quién la ha liado más en la jornada.</p>
+      <h1>Registro de Incidencias</h1>
+      <p class="sub">Seguimiento en tiempo real de incidencias por departamento.</p>
     </div>
     <span class="status" id="status" data-mode="connecting"><span class="dot"></span><span id="status-text">Conectando…</span></span>
   </header>
 
-  <section class="board" id="board" aria-label="Marcador"></section>
+  <div class="tabs-scroll"><nav class="tabs" id="tabs" role="tablist" aria-label="Departamentos"></nav></div>
 
-  <footer>
-    <span class="total">Total del equipo: <b id="total">0</b></span>
-    <div class="reset-area">
-      <button class="ghost" id="reset">Reiniciar a 0</button>
-      <span id="confirm" hidden>
-        <span class="note">¿Seguro? Se pone a 0 para todos.</span>
-        <button class="danger" id="reset-yes">Sí, reiniciar</button>
-        <button class="ghost" id="reset-no">Cancelar</button>
-      </span>
-    </div>
-  </footer>
+  <main id="view"></main>
   <p class="note" id="note"></p>
 </div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getDatabase, ref, onValue, update, set, runTransaction, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+  import { getDatabase, ref, onValue, update, set, push, remove, runTransaction, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
   // Configuración pública del proyecto de Firebase (no es secreta: la seguridad
   // la ponen las reglas de la base de datos, ver database.rules.json).
@@ -163,42 +192,48 @@
     appId: "1:6428742945:web:d1404af3e38c9b4f785a60",
   };
 
-  const PEOPLE = [
-    { key: "walter", name: "Walter" },
-    { key: "cesar", name: "Cesar" },
-    { key: "peter", name: "peterGAYmer" },
+  // Departamentos. Para añadir uno nuevo, añádelo aquí y en database.rules.json.
+  const MODULES = [
+    { key: "sistemas", name: "Sistemas" },
+    { key: "comercial", name: "Comercial" },
+    { key: "marketing", name: "Marketing" },
+    { key: "captacion", name: "Captación" },
+    { key: "ventas", name: "Ventas" },
+    { key: "alquiler", name: "Alquiler" },
   ];
-  const zeros = () => Object.fromEntries(PEOPLE.map(p => [p.key, 0]));
+  const SUMMARY = "resumen";
+  const MAX_NAME = 40;
 
   const db = getDatabase(initializeApp(firebaseConfig));
-  const root = ref(db, "contador");
 
-  let counts = zeros();
-  let last = {};
+  let data = {};          // { modulo: { personas: { id: {nombre, count, last, creado} } } }
   let loaded = false;
   let connected = false;
   let serverOffset = 0;
+  let active = SUMMARY;
+  let pendingRemove = null; // id de la persona con confirmación de borrado abierta
+  let pendingReset = false;
+  let lastCounts = {};      // para animar solo lo que cambia
 
   const $ = id => document.getElementById(id);
-  const panels = {};
+  const h = (tag, attrs = {}, ...kids) => {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") el.className = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (v === true) el.setAttribute(k, "");
+      else if (v !== false && v != null) el.setAttribute(k, v);
+    }
+    for (const kid of kids.flat()) if (kid != null) el.append(kid);
+    return el;
+  };
 
-  PEOPLE.forEach(p => {
-    const el = document.createElement("article");
-    el.className = "panel";
-    el.innerHTML = `
-      <div class="row"><span class="name"></span><span class="tag" hidden>Va en cabeza</span></div>
-      <div class="count" aria-live="polite">0</div>
-      <div class="last"></div>
-      <div class="btns">
-        <button class="minus" aria-label="Restar una a ${p.name}">−</button>
-        <button class="plus">+1 cagada</button>
-      </div>`;
-    el.querySelector(".name").textContent = p.name;
-    el.querySelector(".plus").addEventListener("click", () => plus(p.key));
-    el.querySelector(".minus").addEventListener("click", () => minus(p.key));
-    $("board").appendChild(el);
-    panels[p.key] = el;
-  });
+  function people(mod) {
+    const ps = data[mod]?.personas || {};
+    return Object.entries(ps)
+      .map(([id, p]) => ({ id, nombre: String(p.nombre || "Sin nombre"), count: Math.max(0, Number(p.count) || 0), last: Number(p.last) || 0, creado: Number(p.creado) || 0 }))
+      .sort((a, b) => a.creado - b.creado || a.id.localeCompare(b.id));
+  }
 
   function ago(t) {
     if (!t) return "";
@@ -206,32 +241,156 @@
     if (s < 60) return "Última: hace un momento";
     const m = Math.round(s / 60);
     if (m < 60) return `Última: hace ${m} min`;
-    const h = Math.round(m / 60);
-    if (h < 24) return `Última: hace ${h} h`;
-    return `Última: hace ${Math.round(h / 24)} días`;
+    const hrs = Math.round(m / 60);
+    if (hrs < 24) return `Última: hace ${hrs} h`;
+    return `Última: hace ${Math.round(hrs / 24)} días`;
+  }
+
+  function fail(err) {
+    console.error(err);
+    $("note").textContent = err && /permission/i.test(String(err.code || err.message))
+      ? "La base de datos ha rechazado el cambio. Revisa las reglas de Firebase (database.rules.json)."
+      : "No se pudo guardar el cambio. Comprueba la conexión y vuelve a intentarlo.";
+  }
+  const ok = () => { $("note").textContent = ""; };
+
+  // ---- acciones ----
+  const personRef = (mod, id) => ref(db, `equipos/${mod}/personas/${id}`);
+
+  function plus(mod, id) {
+    update(personRef(mod, id), { count: increment(1), last: serverTimestamp() }).then(ok, fail);
+  }
+  function minus(mod, id) {
+    runTransaction(ref(db, `equipos/${mod}/personas/${id}/count`), v => Math.max(0, (Number(v) || 0) - 1)).then(ok, fail);
+  }
+  function addPerson(mod, nombre) {
+    nombre = nombre.trim().replace(/\s+/g, " ").slice(0, MAX_NAME);
+    if (!nombre) return;
+    set(push(ref(db, `equipos/${mod}/personas`)), { nombre, count: 0, creado: serverTimestamp() }).then(ok, fail);
+  }
+  function removePerson(mod, id) {
+    pendingRemove = null;
+    remove(personRef(mod, id)).then(ok, fail);
+  }
+  function resetModule(mod) {
+    pendingReset = false;
+    const changes = {};
+    for (const p of people(mod)) { changes[`personas/${p.id}/count`] = 0; changes[`personas/${p.id}/last`] = null; }
+    if (Object.keys(changes).length) update(ref(db, `equipos/${mod}`), changes).then(ok, fail);
+    else render();
+  }
+
+  // ---- navegación ----
+  function go(key) {
+    active = key; pendingRemove = null; pendingReset = false;
+    try { history.replaceState(null, "", "#" + key); } catch (e) {}
+    render();
+  }
+  function fromHash() {
+    const k = location.hash.slice(1);
+    return k === SUMMARY || MODULES.some(m => m.key === k) ? k : SUMMARY;
+  }
+  window.addEventListener("hashchange", () => go(fromHash()));
+
+  // ---- pintado ----
+  function renderTabs() {
+    const tabs = $("tabs");
+    tabs.replaceChildren(
+      h("button", { class: "tab", role: "tab", "aria-selected": String(active === SUMMARY), onclick: () => go(SUMMARY) }, "Resumen"),
+      ...MODULES.map(m => {
+        const total = people(m.key).reduce((s, p) => s + p.count, 0);
+        return h("button", { class: "tab", role: "tab", "aria-selected": String(active === m.key), onclick: () => go(m.key) },
+          m.name, h("span", { class: "n" }, String(total)));
+      })
+    );
+  }
+
+  function renderSummary() {
+    const rows = MODULES.map(m => {
+      const ps = people(m.key);
+      const total = ps.reduce((s, p) => s + p.count, 0);
+      const max = Math.max(0, ...ps.map(p => p.count));
+      const leaders = max > 0 ? ps.filter(p => p.count === max).map(p => p.nombre) : [];
+      return { m, total, n: ps.length, leader: leaders.length ? `${leaders.join(", ")} (${max})` : "—" };
+    });
+    const grand = rows.reduce((s, r) => s + r.total, 0);
+    return h("section", { class: "wrap", style: "padding:0" },
+      h("div", { class: "module-head" }, h("h2", {}, "Resumen general")),
+      h("div", { class: "table-wrap" },
+        h("table", {},
+          h("thead", {}, h("tr", {},
+            h("th", {}, "Departamento"), h("th", { class: "num" }, "Personas"), h("th", { class: "num" }, "Incidencias"), h("th", {}, "Más incidencias"))),
+          h("tbody", {}, rows.map(r => h("tr", {},
+            h("td", {}, h("a", { href: "#" + r.m.key }, r.m.name)),
+            h("td", { class: "num" }, String(r.n)),
+            h("td", { class: "num" }, String(r.total)),
+            h("td", {}, r.leader))))
+        )
+      ),
+      h("footer", {}, h("span", { class: "total" }, "Total de incidencias: ", h("b", {}, String(grand))))
+    );
+  }
+
+  function renderModule(mod) {
+    const m = MODULES.find(x => x.key === mod);
+    const ps = people(mod);
+    const max = Math.max(0, ...ps.map(p => p.count));
+    const leaders = ps.filter(p => max > 0 && p.count === max);
+    const total = ps.reduce((s, p) => s + p.count, 0);
+
+    const input = h("input", { id: "add-" + mod, type: "text", maxlength: String(MAX_NAME), placeholder: "Nombre de la persona", "aria-label": "Nombre de la persona", autocomplete: "off" });
+    const form = h("form", { class: "add", onsubmit: e => { e.preventDefault(); addPerson(mod, input.value); input.value = ""; input.focus(); } },
+      input, h("button", { class: "primary", type: "submit", disabled: !loaded }, "Añadir persona"));
+
+    const cards = ps.map(p => {
+      const lead = leaders.includes(p);
+      const countEl = h("div", { class: "count", "aria-live": "polite" }, String(p.count));
+      const key = mod + "/" + p.id;
+      if (lastCounts[key] !== undefined && lastCounts[key] !== p.count) countEl.classList.add("bump");
+      lastCounts[key] = p.count;
+
+      const removeArea = pendingRemove === p.id
+        ? h("div", { class: "remove-area" }, h("span", {}, `¿Quitar a ${p.nombre}?`),
+            h("button", { class: "danger", onclick: () => removePerson(mod, p.id) }, "Sí, quitar"),
+            h("button", { class: "ghost", onclick: () => { pendingRemove = null; render(); } }, "Cancelar"))
+        : h("button", { class: "link", onclick: () => { pendingRemove = p.id; render(); } }, "Quitar persona");
+
+      return h("article", { class: "panel" + (lead ? " lead" : "") },
+        h("div", { class: "row" }, h("span", { class: "name" }, p.nombre),
+          lead ? h("span", { class: "tag" }, leaders.length > 1 ? "Empate" : "Más incidencias") : null),
+        countEl,
+        h("div", { class: "last" }, ago(p.last)),
+        h("div", { class: "btns" },
+          h("button", { class: "minus", "aria-label": `Restar una incidencia a ${p.nombre}`, disabled: !loaded || p.count === 0, onclick: () => minus(mod, p.id) }, "−"),
+          h("button", { class: "plus", disabled: !loaded, onclick: () => plus(mod, p.id) }, "+1 incidencia")),
+        removeArea);
+    });
+
+    const resetArea = pendingReset
+      ? h("div", { class: "reset-area" }, h("span", { class: "note" }, `¿Poner a 0 todo ${m.name}?`),
+          h("button", { class: "danger", onclick: () => resetModule(mod) }, "Sí, reiniciar"),
+          h("button", { class: "ghost", onclick: () => { pendingReset = false; render(); } }, "Cancelar"))
+      : h("div", { class: "reset-area" }, h("button", { class: "ghost", disabled: !loaded || total === 0, onclick: () => { pendingReset = true; render(); } }, "Reiniciar a 0"));
+
+    return h("section", { class: "wrap", style: "padding:0" },
+      h("div", { class: "module-head" }, h("h2", {}, m.name), form),
+      ps.length
+        ? h("div", { class: "board" }, cards)
+        : h("div", { class: "empty" }, loaded ? `Todavía no hay nadie en ${m.name}. Escribe un nombre arriba y pulsa «Añadir persona».` : "Cargando…"),
+      h("footer", {}, h("span", { class: "total" }, `Total de ${m.name}: `, h("b", {}, String(total))), resetArea)
+    );
   }
 
   function render() {
-    const max = Math.max(...PEOPLE.map(p => counts[p.key]));
-    const leaders = PEOPLE.filter(p => counts[p.key] === max);
-    PEOPLE.forEach(p => {
-      const el = panels[p.key];
-      const lead = max > 0 && leaders.includes(p);
-      el.classList.toggle("lead", lead);
-      const tag = el.querySelector(".tag");
-      tag.hidden = !lead;
-      tag.textContent = leaders.length > 1 ? "Empate en cabeza" : "Va en cabeza";
-      const c = el.querySelector(".count");
-      if (c.textContent !== String(counts[p.key])) {
-        c.textContent = counts[p.key];
-        c.classList.remove("bump"); void c.offsetWidth; c.classList.add("bump");
-      }
-      el.querySelector(".last").textContent = ago(last[p.key]);
-      el.querySelector(".plus").disabled = !loaded;
-      el.querySelector(".minus").disabled = !loaded || counts[p.key] === 0;
-    });
-    $("total").textContent = PEOPLE.reduce((s, p) => s + counts[p.key], 0);
-    $("reset").disabled = !loaded;
+    // conservar lo que se está escribiendo en el campo de añadir
+    const focused = document.activeElement;
+    const keepId = focused && focused.tagName === "INPUT" ? focused.id : null;
+    const keepVal = keepId ? focused.value : null;
+
+    renderTabs();
+    $("view").replaceChildren(active === SUMMARY ? renderSummary() : renderModule(active));
+
+    if (keepId && $(keepId)) { $(keepId).value = keepVal; $(keepId).focus(); }
 
     const status = $("status");
     if (!loaded) { status.dataset.mode = "connecting"; $("status-text").textContent = "Conectando…"; }
@@ -239,46 +398,12 @@
     else { status.dataset.mode = "offline"; $("status-text").textContent = "Sin conexión"; }
   }
 
-  function fail(err) {
-    console.error(err);
-    $("note").textContent = err && /permission/i.test(String(err.code || err.message))
-      ? "La base de datos ha rechazado el cambio. Revisa las reglas de Firebase (database.rules.json)."
-      : "No se pudo guardar el cambio. Comprueba la conexión y vuelve a pulsar.";
-  }
-
-  // Sumar usa un incremento atómico del servidor, así que dos clics a la vez
-  // desde ordenadores distintos cuentan los dos.
-  function plus(key) {
-    $("note").textContent = "";
-    update(root, { [`counts/${key}`]: increment(1), [`last/${key}`]: serverTimestamp() }).catch(fail);
-  }
-
-  function minus(key) {
-    $("note").textContent = "";
-    runTransaction(ref(db, `contador/counts/${key}`), v => Math.max(0, (Number(v) || 0) - 1)).catch(fail);
-  }
-
-  $("reset").addEventListener("click", () => { $("reset").hidden = true; $("confirm").hidden = false; });
-  $("reset-no").addEventListener("click", () => { $("confirm").hidden = true; $("reset").hidden = false; });
-  $("reset-yes").addEventListener("click", () => {
-    $("confirm").hidden = true; $("reset").hidden = false;
-    set(root, { counts: zeros() }).catch(fail);
-  });
-
-  onValue(root, snap => {
-    const v = snap.val() || {};
-    counts = zeros();
-    for (const p of PEOPLE) counts[p.key] = Math.max(0, Number(v.counts?.[p.key]) || 0);
-    last = v.last || {};
-    loaded = true;
-    render();
-  }, err => {
-    fail(err);
-  });
+  onValue(ref(db, "equipos"), snap => { data = snap.val() || {}; loaded = true; render(); }, fail);
   onValue(ref(db, ".info/connected"), snap => { connected = snap.val() === true; render(); });
-  onValue(ref(db, ".info/serverTimeOffset"), snap => { serverOffset = Number(snap.val()) || 0; render(); });
+  onValue(ref(db, ".info/serverTimeOffset"), snap => { serverOffset = Number(snap.val()) || 0; });
 
-  setInterval(render, 30000);
+  active = fromHash();
+  setInterval(() => { if (!pendingRemove && !pendingReset) render(); }, 30000);
   render();
 </script>
 </body>

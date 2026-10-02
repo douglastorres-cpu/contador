@@ -1,17 +1,26 @@
-# 💩 Contador de Cagadas
+# Registro de Incidencias
 
-Marcador compartido en tiempo real para llevar la cuenta de quién la ha cagado más veces mientras trabajamos.
+Marcador compartido en tiempo real para llevar el recuento de incidencias por persona en cada departamento.
 
-Participantes: **Walter**, **Cesar** y **peterGAYmer**.
+## Departamentos
 
-## Cómo funciona
+Sistemas, Comercial, Marketing, Captación, Ventas y Alquiler. Cada uno tiene su pestaña y la pestaña **Resumen** muestra los totales de todos.
+
+## Uso
+
+- **Añadir persona**: escribe el nombre en el departamento y pulsa «Añadir persona» (o Enter).
+- **+1 incidencia** suma una; **−** resta una (nunca baja de 0).
+- **Quitar persona** pide confirmación y borra a esa persona y su recuento.
+- **Reiniciar a 0** pide confirmación y pone a cero el recuento de ese departamento (las personas se mantienen).
+- Cada departamento tiene su propio enlace, por ejemplo `.../contador/#ventas`.
+- «En directo», arriba a la derecha, indica que está conectado: todos los que tengan la página abierta ven los cambios al instante.
+
+## Cómo está hecho
 
 - `index.html` es toda la página. Se publica gratis con **GitHub Pages**.
-- Los números se guardan en **Firebase Realtime Database** (proyecto `contador-eaa71`), así que todos los que abren la página ven el mismo marcador y se actualiza al instante.
-- **+1 cagada** suma de forma atómica en el servidor: si dos personas pulsan a la vez, cuentan los dos clics.
-- **−** resta una (nunca baja de 0).
-- **Reiniciar a 0** pide confirmación y pone el marcador a cero para todos.
-- Arriba a la derecha, «En directo» indica que está conectado a la base de datos.
+- Los datos se guardan en **Firebase Realtime Database** (proyecto `contador-eaa71`), bajo `equipos/<departamento>/personas`.
+- Las sumas son atómicas en el servidor: si dos personas pulsan a la vez, cuentan las dos.
+- Para añadir un departamento nuevo hay que añadirlo en la lista `MODULES` de `index.html` y en `database.rules.json`.
 
 ## Publicar en GitHub Pages
 
@@ -22,14 +31,6 @@ Participantes: **Walter**, **Cesar** y **peterGAYmer**.
 
 ## Reglas de Firebase
 
-El «modo de prueba» de Firebase deja de funcionar a los 30 días. Para que siga funcionando:
+En la consola de Firebase: **Realtime Database → Reglas**, sustituye el contenido por el de `database.rules.json` y pulsa **Publicar**.
 
-1. En la consola de Firebase: **Realtime Database → Reglas**.
-2. Sustituye el contenido por el de `database.rules.json` y pulsa **Publicar**.
-
-Estas reglas dejan leer y escribir solo el marcador (`/contador`), solo para los tres nombres y solo con números entre 0 y 100000. Cualquiera que tenga el enlace puede sumar y restar.
-
-## Versión de claude.ai
-
-`artifact/contador.html` es una versión alternativa publicada como Artifact de claude.ai
-(https://claude.ai/artifact/8m3ctxcWxp5P69D83VTcbU). Usa la base de datos de claude.ai en lugar de Firebase y requiere que cada persona tenga cuenta de claude.ai.
+Estas reglas solo dejan leer y escribir los seis departamentos, con nombres de hasta 40 caracteres y recuentos entre 0 y 100000. Cualquiera que tenga el enlace puede añadir personas y sumar o restar.

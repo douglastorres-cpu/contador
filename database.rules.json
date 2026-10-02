@@ -2,21 +2,34 @@
   "rules": {
     ".read": false,
     ".write": false,
-    "contador": {
+    "equipos": {
       ".read": true,
-      ".write": true,
-      "counts": {
-        "$persona": {
-          ".validate": "($persona === 'walter' || $persona === 'cesar' || $persona === 'peter') && newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+      "$modulo": {
+        ".validate": "$modulo.matches(/^(sistemas|comercial|marketing|captacion|ventas|alquiler)$/)",
+        "personas": {
+          "$id": {
+            ".write": true,
+            ".validate": "newData.hasChildren(['nombre', 'count'])",
+            "nombre": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
+            },
+            "count": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+            },
+            "last": {
+              ".validate": "newData.isNumber()"
+            },
+            "creado": {
+              ".validate": "newData.isNumber()"
+            },
+            "$otro": {
+              ".validate": false
+            }
+          }
+        },
+        "$otro": {
+          ".validate": false
         }
-      },
-      "last": {
-        "$persona": {
-          ".validate": "($persona === 'walter' || $persona === 'cesar' || $persona === 'peter') && newData.isNumber()"
-        }
-      },
-      "$otro": {
-        ".validate": false
       }
     }
   }
